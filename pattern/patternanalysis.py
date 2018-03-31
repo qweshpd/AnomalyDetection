@@ -94,10 +94,10 @@ class PatternAnalysis(object):
         '''
         # print('Loading Data...')
         logger.debug(' ' + self.__class__.__name__)
-        logger.debug(' Loading...')
         timevar = np.array([])
         timevar = np.append(timevar, time.clock())  
         
+        logger.debug(' Loading...')        
         data = self._getdata(dev_intf)
         timevar = np.append(timevar, time.clock())
         
@@ -122,6 +122,45 @@ class PatternAnalysis(object):
                      % (timevar[-1] - timevar[0], timeused[0], timeused[1], timeused[2], timeused[3]))
         
         return output
+    
+    def qapp_analyze(self, qmap):
+        '''
+        Qapp-based analysis.
+        '''
+        # print('Loading Data...')
+
+        logger.debug(' ' + self.__class__.__name__)
+        timevar = np.array([])
+        timevar = np.append(timevar, time.clock())  
+        
+        logger.debug(' Loading...')
+        qdata = self._getdevice(qmap)
+        timevar = np.append(timevar, time.clock())
+            
+        logger.debug(' Preprocessing...')
+        predata = self._preprocess(qdata)
+        timevar = np.append(timevar, time.clock())
+        
+        logger.debug(' Processing...')
+        prodata = self._process(predata)
+        timevar = np.append(timevar, time.clock())
+        
+        logger.debug(' Outputting...')
+        qinfo = self._qoutput(qdata, prodata)
+        timevar = np.append(timevar, time.clock())
+        
+        timeused = timevar[1:] - timevar[:-1]
+        logger.debug(' Total time used:\t%.6f seconds.\n\
+                     \t\t\tLoad Data\t\t%.6f seconds\n\
+                     \t\t\tPreprocess\t\t%.6f seconds\n\
+                     \t\t\tProcess\t\t\t%.6f seconds\n\
+                     \t\t\tOutput \t\t\t%.6f seconds' 
+                     % (timevar[-1] - timevar[0], timeused[0], timeused[1], timeused[2], timeused[3]))
+
+        return qinfo
+    
+    def _gedevice(self, qmap):
+        pass
     
     def _getdata(self, dev_intf):
 
@@ -157,6 +196,9 @@ class PatternAnalysis(object):
     def help(self):
         print(PatternAnalysis.__doc__)
         print(self.__doc__)    
+    
+    def _qoutput(self, qdata, prodata):
+        pass
         
 #%% local peak analysis
  
@@ -273,7 +315,19 @@ class CycleAnalysis(PatternAnalysis):
             print(' days, '.join('%.3f' % i for i in frequency) + ' days\n')
         else:
             print('No cycle found with the given conditions.\n')
-    
+            
+#    def _qoutput(self, qdata, frequency):
+#        
+#        if len(frequency):
+#            DrawDeviceNote(dev_name, dev_name, interf + ': ' + 
+#                           ' days, '.join('%.3f' % i for i in frequency) + ' days', 
+#                           NoteType.Append)
+#        # AddMessage('     Cycle Detected: ' + ' days, '.join('%.3f' % i for i in frequency) + ' days')
+#        else:
+#            DrawDeviceNote(dev_name, dev_name, 
+#                           'No cycle found with the given conditions.',
+#                           NoteType.Append)
+#        # AddMessage('     No cycle found with the given conditions.')
 #%% similarity analysis   
 
 class SimilarityAnalysis(PatternAnalysis):
@@ -298,7 +352,7 @@ class SimilarityAnalysis(PatternAnalysis):
         self.parameter['slot'] = 80
         self.parameter['show'] = True
         self.threshold = 0.85
-        self.drift = 0.02
+        self.drift = 0.01
     
     def _preprocess(self, ts):
         if not len(ts[0]) == len(ts[1]):
@@ -327,7 +381,8 @@ class SimilarityAnalysis(PatternAnalysis):
                 except:
                     print('Modules Unavailable!')
                 
-                temp = np.array(predata[0]) - np.array(predata[1])
+                k = np.array(predata[0]) - np.array(predata[1])
+                temp = (k - np.min(k)) / (np.max(k) - np.min(k))
                 indexes = dc.detect_cusum(temp, self.threshold * np.std(temp), 
                                           self.drift, 1, 0)    
             return [indexes[1], indexes[2]]
@@ -660,16 +715,28 @@ class NodataAnalysis(PatternAnalysis):
     
     
     '''
+    
+    
+    
     def __init__(self):
         super().__init__()
+        self.parameter['peri'] = '2h'
+        self._timesheet = {'s':1, 'm':60, 'h':3600, 'd':24*3600}
         
-       
     def _process(self, data):
-        if np.any(data.isnull()) == False:
-            return data            
-        else:
-            pass
-    
+        
+        slot = int(self.parameter['peri'][:-1]) * \
+                    self._timesheet[self.parameter['peri'][-1]]
+        pdata = data.dropna(inplace = True)
+        periods = pdata.index[1:] - pdata.index[:-1]
+        temp = np.where(periods.total_seconds() > slot)
+        return temp + 1
+        
     def _getoutput(self, data, index):
-        pass
-
+        if not len(index):
+            print('No missing data in current data flow.')
+        else:
+            print('Unexpected error happended %d times.' % len(index))
+            print('Initial Time \t\t\tFinal Time')
+            for ind in index:
+                print(str(data.index[ind - 1]) + '\t' + str(data.index[ind]))
