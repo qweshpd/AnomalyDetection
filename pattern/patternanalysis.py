@@ -3,7 +3,7 @@
 import pandas as pd
 import numpy as np
 import math
-import loadata
+import libs.loadata
 import scipy.stats
 import time
 
@@ -237,7 +237,7 @@ class LocalPeakanalysis(PatternAnalysis):
         '''
         
         try:
-            import detect_peaks as dp
+            import libs.detect_peaks as dp
         except:
             print('Modules Unavailable!')
             
@@ -294,7 +294,7 @@ class CycleAnalysis(PatternAnalysis):
     def _process(self, data):
         
         try:
-            import detect_peaks as dp
+            import libs.detect_peaks as dp
         except:
             print('Modules Unavailable!')
 
@@ -377,7 +377,7 @@ class SimilarityAnalysis(PatternAnalysis):
                 return [1]
             else: # simliarity and slot
                 try:
-                    import detect_cusum as dc
+                    import libs.detect_cusum as dc
                 except:
                     print('Modules Unavailable!')
                 
@@ -414,9 +414,9 @@ class SimilarityAnalysis(PatternAnalysis):
         for sim in index:
             plt.axvline(x = sim[0], color = 'red')
             plt.axvline(x = sim[1], color = 'red')
-            plt.plot(np.linspace(sim[0], sim[1], sim[1] - sim[0]) - 1, 
+            plt.plot(np.linspace(sim[0], sim[1] - 1, sim[1] - sim[0] - 1) - 1, 
                      data[0][sim[0]:sim[1]], 'r')
-            plt.plot(np.linspace(sim[0], sim[1], sim[1] - sim[0]) - 1, 
+            plt.plot(np.linspace(sim[0], sim[1] - 1, sim[1] - sim[0] - 1) - 1, 
                      data[1][sim[0]:sim[1]], 'r')
         plt.legend()
         plt.show()
@@ -465,7 +465,7 @@ class OnsetAnalysis(PatternAnalysis):
         '''
 
         try:
-            import detect_onset as do
+            import libs.detect_onset as do
         except:
             print('Modules Unavailable!')
             
@@ -607,7 +607,7 @@ class TrendAnalysis(PatternAnalysis):
     def _process(self, data):
 
         try:
-            import detect_cusum as dc
+            import libs.detect_cusum as dc
         except:
             print('Modules Unavailable!')
             
@@ -671,7 +671,7 @@ class SaturationAnalysis(PatternAnalysis):
     
     def _process(self, data):
         try:
-            import detect_onset as do
+            import libs.detect_onset as do
         except:
             print('Modules Unavailable!')
         
