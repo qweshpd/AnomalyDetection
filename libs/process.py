@@ -87,6 +87,49 @@ def detect_cusum(x, threshold, drift, ending):
 
     return ta, tai, taf, amp, gp, gn
 
+def _plotcusum(x, threshold, drift, ending, ta, tai, taf, gp, gn):
+    '''Plot results of the detect_cusum function.'''
+
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        print('matplotlib is not available.')
+    else:
+        _, (ax1, ax2) = plt.subplots(2, 1, figsize = (15, 6))
+
+        t = range(x.size)
+        ax1.plot(t, x, 'b-', lw=2)
+        if len(ta):
+            ax1.plot(tai, x[tai], '>', mfc = 'g', mec = 'g', ms = 10,
+                     label='Start')
+            if ending:
+                ax1.plot(taf, x[taf], '<', mfc='g', mec='g', ms=10,
+                         label = 'Ending')
+            ax1.plot(ta, x[ta], 'o', mfc = 'r', mec = 'r', mew = 1, ms = 5,
+                     label = 'Alarm')
+            ax1.legend(loc = 'best', framealpha = .5, numpoints = 1)
+#        ax1.set_xlim(-.01*x.size, x.size*1.01-1)
+#        ax1.set_xlabel('Data #', fontsize=14)
+#        ax1.set_ylabel('Amplitude', fontsize=14)
+#        ymin, ymax = x[np.isfinite(x)].min(), x[np.isfinite(x)].max()
+#        yrange = ymax - ymin if ymax > ymin else 1
+#        ax1.set_ylim(ymin - 0.1*yrange, ymax + 0.1*yrange)
+#        ax1.set_title('Time series and detected changes ' +
+#                      '(threshold= %.3g, drift= %.3g): N changes = %d'
+#                      % (threshold, drift, len(tai)))
+        ax2.plot(t, gp, 'y-', label = '+')
+        ax2.plot(t, gn, 'm-', label = '-')
+#        ax2.set_xlim(-.01*x.size, x.size*1.01-1)
+#        ax2.set_xlabel('Data #', fontsize=14)
+#        ax2.set_ylim(-0.01*threshold, 1.1*threshold)
+        ax2.axhline(threshold, color = 'r')
+#        ax1.set_ylabel('Amplitude', fontsize=14)
+#        ax2.set_title('Time series of the cumulative sums of ' +
+#                      'positive and negative changes')
+        ax2.legend(loc = 'best', framealpha = .5, numpoints = 1)
+        plt.tight_layout()
+        plt.show()
+
     
 def detect_peaks(x, mph = None, mpd = 1, threshold = 0, edge='rising'):
 
