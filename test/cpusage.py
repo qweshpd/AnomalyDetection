@@ -1,7 +1,10 @@
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
+'''A test script for online anomaly detection based on Kalman Filter.'''
+
 import psutil
-import numpy as np
 import matplotlib.pyplot as plt
-from datetime import datetime, date, timedelta
 import time  
 import warnings
 warnings.filterwarnings("ignore")
@@ -21,7 +24,7 @@ for i in range(seconds):
     times.append(time.strftime("%H:%M:%S", time.localtime()))
     for k in range(logicnum):
         vars()['CPU' + str(k)].append(usage[k])
-        plt.subplot(2, 4, k + 1)
+        plt.subplot(2, int(logicnum / 2), k + 1)
         if usage[k] > 60.0 and i > 3:  
             print('\nLogical CPU' + str(k) + ' Usage: %.2f'% usage[k])
             print(time.strftime("%Y-%m-%d %H:%M:%S", time.localtime()))

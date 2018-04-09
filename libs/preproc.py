@@ -19,5 +19,5 @@ def getdtime(ymd):
 def normalize(data, method):
     if method == '01':
         return (data - np.min(data)) / (np.max(data) - np.min(data))
-    if method == '-11':
+    elif method == '-11':
         return (data - np.mean(data)) / (np.max(data) - np.min(data))

@@ -81,6 +81,3 @@ def _recintf(shortintf):
     elif temp[0].startswith('g'):
         temp[0] = 'GigabitEthernet' + temp[0][-1]
     return '/'.join(temp)
-
-if __name__ == '__main__':
-    pass
