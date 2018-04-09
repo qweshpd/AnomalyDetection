@@ -3,7 +3,7 @@
 import pandas as pd
 import numpy as np
 import math
-from libs import loadata, preproc
+from libs import loadata, process, preproc
 import scipy.stats
 import time
 
@@ -236,13 +236,8 @@ class LocalPeakanalysis(PatternAnalysis):
         '''
         Find peaks in data based on their amplitude and other features.
         '''
-        
-        try:
-            import libs.detect_peaks as dp
-        except:
-            print('Modules Unavailable!')
             
-        index = dp.detect_peaks(data, mph = self.parameter['mph'],
+        index = process.detect_peaks(data, mph = self.parameter['mph'],
                                 mpd = self.parameter['mpd'],
                                 threshold = self.parameter['thre'])
         return index
@@ -294,18 +289,13 @@ class CycleAnalysis(PatternAnalysis):
         
     def _process(self, data):
         
-        try:
-            import libs.detect_peaks as dp
-        except:
-            print('Modules Unavailable!')
-
         num = math.ceil(len(data)/ 2)
         fftf = np.fft.fft(data) * 2 / len(data)
         
         if not self.parameter['mph']:
             self.parameter['mph'] = np.mean(data) / 3
             
-        frequency = dp.detect_peaks(abs(fftf)[0: num],
+        frequency = process.detect_peaks(abs(fftf)[0: num],
                         mph = self.parameter['mph'],
                         mpd = self.parameter['mpd'],
                         threshold = self.parameter['thre']) / 12
@@ -361,7 +351,10 @@ class SimilarityAnalysis(PatternAnalysis):
             raise
             
         if not self.parameter['slot']: # care only whether similar
-            return preproc.normalize(ts, '-11')
+            tseries = []
+            for data in ts:
+                tseries.append(preproc.normalize(data, '-11'))
+            return tseries
         else: # care whole parts
             return ts
     
@@ -374,14 +367,9 @@ class SimilarityAnalysis(PatternAnalysis):
             if not self.parameter['slot']: # only care similarity
                 return [1]
             else: # simliarity and slot
-                try:
-                    import libs.detect_cusum as dc
-                except:
-                    print('Modules Unavailable!')
-                
                 k = np.array(predata[0]) - np.array(predata[1])
                 temp = (k - np.min(k)) / (np.max(k) - np.min(k))
-                indexes = dc.detect_cusum(temp, self.threshold * np.std(temp), 
+                indexes = process.detect_cusum(temp, self.threshold * np.std(temp), 
                                           self.drift, 1, 0)    
             return [indexes[1], indexes[2]]
         
@@ -462,12 +450,7 @@ class OnsetAnalysis(PatternAnalysis):
         Detects onset in data based on amplitude threshold.
         '''
 
-        try:
-            import libs.detect_onset as do
-        except:
-            print('Modules Unavailable!')
-            
-        inds = do.detect_onset(data, threshold = self.parameter['thre'], 
+        inds = process.detect_onset(data, threshold = self.parameter['thre'], 
                                   n_above = self.parameter['nab'], 
                                   n_below = self.parameter['nbe'],
                                   threshold2 = self.parameter['thre2'], 
@@ -608,12 +591,8 @@ class TrendAnalysis(PatternAnalysis):
 
     def _process(self, data):
 
-        try:
-            import libs.detect_cusum as dc
-        except:
-            print('Modules Unavailable!')
             
-        ta, tai, taf, amp, gp, gn = dc.detect_cusum(data, self.parameter['thre'],
+        ta, tai, taf, amp, gp, gn = process.detect_cusum(data, self.parameter['thre'],
                                     self.parameter['drift'], 
                                     self.parameter['end'], False)
         
@@ -629,12 +608,7 @@ class TrendAnalysis(PatternAnalysis):
         gn = index[5]
  
         if self.parameter['show']:
-            try:
-                import detect_cusum as dc
-            except:
-                print('Modules Unavailable!')
-                
-            dc._plot(data, self.parameter['thre'], self.parameter['drift'],
+            process._plotcusum(data, self.parameter['thre'], self.parameter['drift'],
                      self.parameter['end'], ta, tai, taf, gp, gn)
         return [ta, tai, taf, amp]
 
@@ -672,10 +646,6 @@ class SaturationAnalysis(PatternAnalysis):
         self.parameter['show'] = True
     
     def _process(self, data):
-        try:
-            import libs.detect_onset as do
-        except:
-            print('Modules Unavailable!')
         
         if type(self.parameter['thre']) == type(''):
             thres = max(data) * float(self.parameter['thre'].split('%')[0])/100
@@ -684,7 +654,7 @@ class SaturationAnalysis(PatternAnalysis):
         elif type(self.parameter['thre']) == type(0.0):
             thres = self.parameter['thre']
         
-        inds = do.detect_onset(data, threshold = thres, 
+        inds = process.detect_onset(data, threshold = thres, 
                                   n_above = self.parameter['nab'], 
                                   n_below = self.parameter['nbe'])
         return inds
