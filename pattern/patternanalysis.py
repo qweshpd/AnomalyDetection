@@ -3,7 +3,7 @@
 import pandas as pd
 import numpy as np
 import math
-import libs.loadata
+from libs import loadata, preproc
 import scipy.stats
 import time
 
@@ -155,7 +155,8 @@ class PatternAnalysis(object):
                      \t\t\tPreprocess\t\t%.6f seconds\n\
                      \t\t\tProcess\t\t\t%.6f seconds\n\
                      \t\t\tOutput \t\t\t%.6f seconds' 
-                     % (timevar[-1] - timevar[0], timeused[0], timeused[1], timeused[2], timeused[3]))
+                     % (timevar[-1] - timevar[0], timeused[0], timeused[1], 
+                        timeused[2], timeused[3]))
 
         return qinfo
     
@@ -164,23 +165,23 @@ class PatternAnalysis(object):
     
     def _getdata(self, dev_intf):
 
-        if type(dev_intf) == type(''):
+        if type(dev_intf) == type(''): # string type input data
             dev, intf = dev_intf.split('_')
             return loadata.getdata(dev, intf,
                                    sdate = self.startdate, edate = self.endate)
-        elif type(dev_intf) == type([]):
-            if type(dev_intf[0][0]) == type(' '):
+        elif type(dev_intf) == type([]):# list type input data
+            if type(dev_intf[0][0]) == type(' '): # list of interface
                 datalist = []
                 for devname_interface in dev_intf:
                     dev, intf = devname_interface.split('_')
                     datalist.append(loadata.getdata(dev, intf, 
                                     sdate = self.startdate, edate = self.endate))
                 return datalist
-            else:
+            else: # list of number
                 return dev_intf
-        elif type(dev_intf) == np.ndarray:
+        elif type(dev_intf) == np.ndarray: # ndarray type input data
             return pd.Series(dev_intf)
-        elif type(dev_intf) == pd.Series:
+        elif type(dev_intf) == pd.Series: # Series type input data
             return dev_intf
         
     
@@ -359,12 +360,9 @@ class SimilarityAnalysis(PatternAnalysis):
             print('Two data series must be of the same length!')
             raise
             
-        if not self.parameter['slot']:
-            tseries = []
-            for data in ts:
-                tseries.append((data - np. mean(data))/ (np.max(data) - np.min(data)))
-            return tseries
-        else:
+        if not self.parameter['slot']: # care only whether similar
+            return preproc.normalize(ts, '-11')
+        else: # care whole parts
             return ts
     
     def _process(self, predata):       
@@ -560,17 +558,21 @@ class StatusAnalysis(PatternAnalysis):
                   '\t ==> \t' + str(data[i]))
         
         if self.parameter['show']:
-            plt.figure()
-            plt.plot(data, color = 'blue', label = 'data')
-            plt.plot([], [], color = 'red', label = 'change')
-            for i in index:
-                plt.plot([i - 1, i], data[i - 1 : i + 1], 'r-', 
-                         marker = 'o')
-            plt.legend()
-            plt.show()
+            self._plot(data, index)
+
         
         del self.parameter['current status']
         return index
+    
+    def _plot(self, data, index):
+        plt.figure()
+        plt.plot(data, color = 'blue', label = 'data')
+        plt.plot([], [], color = 'red', label = 'change')
+        for i in index:
+            plt.plot([i - 1, i], data[i - 1 : i + 1], 'r-', 
+                     marker = 'o')
+        plt.legend()
+        plt.show()
             
 #%% trend analysis
 
