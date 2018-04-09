@@ -594,7 +594,7 @@ class TrendAnalysis(PatternAnalysis):
             
         ta, tai, taf, amp, gp, gn = process.detect_cusum(data, self.parameter['thre'],
                                     self.parameter['drift'], 
-                                    self.parameter['end'], False)
+                                    self.parameter['end'])
         
         return [ta, tai, taf, amp, gp, gn]
     

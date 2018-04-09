@@ -7,7 +7,7 @@ import datetime
 import pandas as pd
 import pymongo
 from pymongo import MongoClient
-from preproc import getdtime
+from libs.preproc import getdtime
 
 def getdata(devname, intf, sdate = None, edate = None):
     '''

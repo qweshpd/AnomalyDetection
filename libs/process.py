@@ -62,7 +62,7 @@ def detect_cusum(x, threshold, drift, ending):
 
     # Estimation of when the change ends (offline form)
     if tai.size and ending:
-        _, tai2, _, _, _, _ = detect_cusum(x[::-1], threshold, drift, False, False)
+        _, tai2, _, _, _, _ = detect_cusum(x[::-1], threshold, drift, False)
         taf = x.size - tai2[::-1] - 1
         # Eliminate repeated changes, changes that have the same beginning
         tai, ind = np.unique(tai, return_index=True)
