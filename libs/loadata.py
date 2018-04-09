@@ -43,28 +43,28 @@ def getdata(devname, intf, sdate = None, edate = None):
     # extract data from database
     
 
-    mongoClient = MongoClient('mongodb://%s:%s@localhost:27017' % 
-                          ("username", "password"))
-    MLDataQappDB = mongoClient["MLDataQappNetbrain"]
-    dbCollection = MLDataQappDB["InterfaceDetail"]
-    cursor = dbCollection.find({"device_name": devname, 
-                "date": {
-                    "$gte": start_date,
-                    "$lt": end_date
-                }}).sort([("date", pymongo.ASCENDING)])
+    mongoClient = MongoClient('mongodb://%s:%s@%s:27017' % 
+                          ('username', 'password', 'host'))
+    MLDataQappDB = mongoClient['MLDataQappNetbrain']
+    dbCollection = MLDataQappDB['InterfaceDetail']
+    cursor = dbCollection.find({'device_name': devname, 
+                'date': {
+                    '$gte': start_date,
+                    '$lt': end_date
+                }}).sort([('date', pymongo.ASCENDING)])
  
     timeArr = []
     valueArr = []
     for itemCursor in cursor:
-        timeArr.append(itemCursor["date"] )
-        # devName = itemCursor["device_name"]
-        InterfaceDetailArr = itemCursor["InterfaceDetail"]
+        timeArr.append(itemCursor['date'] )
+        # devName = itemCursor['device_name']
+        InterfaceDetailArr = itemCursor['InterfaceDetail']
         for oneInf in InterfaceDetailArr:
-            infName = oneInf["intf"]
+            infName = oneInf['intf']
             if not infName == interf:
                 continue
             
-            input_rate = float(oneInf["input_rate_bit"])
+            input_rate = float(oneInf['input_rate_bit'])
             valueArr.append(input_rate)   
         
     timeseries = pd.Series(valueArr, index = timeArr)
@@ -91,5 +91,5 @@ def _recintf(shortintf):
         temp[0] = 'GigabitEthernet' + temp[0][-1]
     return '/'.join(temp)
 
-if __name__ == "__main__":
+if __name__ == '__main__':
     pass
