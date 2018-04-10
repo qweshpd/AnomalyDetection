@@ -422,16 +422,16 @@ class OnsetAnalysis(PatternAnalysis):
     Parameters
     ----------
     thre : number, optional (default = 0)
-        minimum amplitude of to detect.
+        Minimum amplitude of to detect.
     nab : number, optional (default = 1)
-        minimum number of continuous samples >= 'thre' to detect.
+        Minimum number of continuous samples >= 'thre' to detect.
     nbe : number, optional (default = 0)
-        minimum number of continuous samples below 'thre' that will be ignored 
+        Minimum number of continuous samples below 'thre' that will be ignored 
         in the detection of 'x' >= 'thre'.
     thre2 : number or None, optional (default = None)
-        minimum amplitude of 'nab2' values in 'x' to detect.
+        Minimum amplitude of 'nab2' values in 'x' to detect.
     nab2 : number, optional (default = 1)
-        minimum number of samples >= 'thre2' to detect.
+        Minimum number of samples >= 'thre2' to detect.
     show : bool, optional (default = False)
         If True, plot data in matplotlib figure.
     '''
@@ -574,9 +574,9 @@ class TrendAnalysis(PatternAnalysis):
     Parameters
     ----------
     thre : positive number, optional (default = 1)
-        amplitude threshold for the change in the data
+        Amplitude threshold for the change in the data
     drift : positive number, optional (default = 0)
-        drift term that prevents any change in the absence of change
+        Drift term that prevents any change in the absence of change
     ending : bool, optional (default = True)
         True to estimate when the change ends; False otherwise.
     show : bool, optional (default = False)
@@ -629,11 +629,11 @@ class SaturationAnalysis(PatternAnalysis):
     Parameters
     ----------
     thre : positive number, optional (default = '90%')
-        amplitude threshold for the change in the data
+        Amplitude threshold for the change in the data
     nab : number, optional (default = 20)
-        minimum number of continuous samples to detect.
+        Minimum number of continuous samples to detect.
     nbe : number, optional (default = 5)
-        minimum number of continuous samples below 'thre' that will be ignored.
+        Minimum number of continuous samples below 'thre' that will be ignored.
     show : bool, optional (default = False)
         If True, plot data in matplotlib figure.
     '''    
@@ -683,22 +683,19 @@ class NodataAnalysis(PatternAnalysis):
     
     Parameters
     ----------
-    
-    
-    
+    offset : A number of string aliases are 
+        Given to useful common time series frequencies.
     '''
-    
-    
-    
+
     def __init__(self):
         super().__init__()
-        self.parameter['peri'] = '2h'
-        self._timesheet = {'s':1, 'm':60, 'h':3600, 'd':24*3600}
+        self.parameter['offset'] = '2H'
+        self._timesheet = {'S':1, 'M':60, 'H':3600, 'D':24*3600}
         
     def _process(self, data):
         
-        slot = int(self.parameter['peri'][:-1]) * \
-                    self._timesheet[self.parameter['peri'][-1]]
+        slot = int(self.parameter['offset'][:-1]) * \
+                    self._timesheet[self.parameter['offset'][-1]]
         pdata = data.dropna(inplace = True)
         periods = pdata.index[1:] - pdata.index[:-1]
         temp = np.where(periods.total_seconds() > slot)
