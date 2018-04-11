@@ -1,28 +1,52 @@
-import math
+#!/usr/bin/env python
+# -*- coding: utf-8 -*-
+
 import numpy as np
 import pandas as pd
-import sys 
 
 from statsmodels.stats.diagnostic import acorr_ljungbox
 import statsmodels.tsa.stattools as st
 from statsmodels.tsa.arima_model import ARIMA
 
 import matplotlib.pylab as plt
-
-from matplotlib.pyplot import *
+from matplotlib.pyplot import rcParams
 rcParams['figure.figsize'] = 15, 6
-
 
 import warnings
 warnings.filterwarnings("ignore")
+
 '''
    Required library: numpy, pandas, statsmodels.
    Valid only for one-dimension-time-series data. 
-   
 '''
-# Stationary Test 
-def test_stat(timeseries, confid = '1%', show = False,  nlag = 5, pvalue = 0.05):
+
+class AutoARIAM(object):
+    '''
+    Compute parameters p,q,dautomatically based on data features.
     
+    Attributes:
+    set_para: Set parameters.
+    get_para: Get parameters.
+    test_stat: Stationary test.
+    get_d:
+    get_pq:
+    fit: Fit ARIMA model onto data.
+    
+    Parameters
+    ----------
+    conf : number
+        Confidence level for statistical test.
+    nlag: number
+    
+    pvalue: number
+        
+    '''
+    def __init__(self):
+        self.parameter = {}
+
+
+def test_stat(timeseries, confid = '1%', show = False,  nlag = 5, pvalue = 0.05):
+    '''Stationary Test.'''
     timeseries = np.array(timeseries)
     # Perform Dickey-Fuller test:
     dftest = st.adfuller(timeseries, 1)
@@ -44,8 +68,8 @@ def test_stat(timeseries, confid = '1%', show = False,  nlag = 5, pvalue = 0.05)
             dfoutput['Critical Value (%s)'%key] = value
         print(dfoutput)
 
-# Get parameter d
 def getd(timeseries, confid = '1%'):
+    '''Get parameter d. '''
     if not confid:
         confid = '1%'
     # If stationary, return d = 0
@@ -68,12 +92,13 @@ def getd(timeseries, confid = '1%'):
                     print('Exceed Differential Limit! Not fit ARIAM!')
 
 def getpq(timeseries, max = 10):
+    '''Get parameter p,q based on AIC.'''
     print('Maximum total runtime of 5 minutes are expected. Please be patient and wait your results.')
     order = st.arma_order_select_ic(timeseries, max_ar = max, max_ma = max, ic=['aic', 'bic'])
     return order.aic_min_order
 
-# Fit ARIMA model
 def fitARIMA(times, confid = '1%', p = 0, d = 0, q = 0, max = 10, foreday = 1, show = False):
+    '''Fit ARIMA model.'''
     timeseries = np.array(times)
     # timeseries = np.log(np.array(times))
     if p == 0 and q == 0:
@@ -99,9 +124,8 @@ def fitARIMA(times, confid = '1%', p = 0, d = 0, q = 0, max = 10, foreday = 1, s
 
         return pd.Series(model, index = times.index) #, forecast_ARIMA_log
 
-
-# Print alarm timestamps
 def getalarm(timesa, timestamp, p = 0, d = 0, q = 0, max = 10, show = False):
+    '''Print alarm timestamps'''
     mean = np.mean(timesa)
     ts_model = abs(fitARIMA(timesa, p = p, q = q, show = show))
     anomal = np.where((timesa > 1.5 * ts_model) & (timesa > mean))[0]
@@ -117,8 +141,8 @@ def getalarm(timesa, timestamp, p = 0, d = 0, q = 0, max = 10, show = False):
         plt.legend()
         plt.show()
 
-# Recover array given difference, index and head data
 def _rectsdiff(timesdiff, diffhead = []):
+    '''Recover array given difference, index and head data.'''
     l = len(diffhead)
     if l == 0:
         return timesdiff
