@@ -196,6 +196,7 @@ class PatternAnalysis(object):
         
     def help(self):
         print(PatternAnalysis.__doc__)
+        print('    ' + self.__class__.__name__)
         print(self.__doc__)    
     
     def _qoutput(self, qdata, prodata):
@@ -370,7 +371,7 @@ class SimilarityAnalysis(PatternAnalysis):
                 k = np.array(predata[0]) - np.array(predata[1])
                 temp = (k - np.min(k)) / (np.max(k) - np.min(k))
                 indexes = process.detect_cusum(temp, self.threshold * np.std(temp), 
-                                          self.drift, 1, 0)    
+                                          self.drift, 1)    
             return [indexes[1], indexes[2]]
         
     def _getoutput(self, data, prodata):  
@@ -399,10 +400,10 @@ class SimilarityAnalysis(PatternAnalysis):
         plt.plot([], [], 'r', label = 'Similar Part')
         for sim in index:
             plt.axvline(x = sim[0], color = 'red')
-            plt.axvline(x = sim[1], color = 'red')
-            plt.plot(np.linspace(sim[0], sim[1] - 1, sim[1] - sim[0] - 1) - 1, 
+            plt.axvline(x = sim[1] - 1, color = 'red')
+            plt.plot(np.linspace(sim[0], sim[1] - 1, sim[1] - sim[0]), 
                      data[0][sim[0]:sim[1]], 'r')
-            plt.plot(np.linspace(sim[0], sim[1] - 1, sim[1] - sim[0] - 1) - 1, 
+            plt.plot(np.linspace(sim[0], sim[1] - 1, sim[1] - sim[0]), 
                      data[1][sim[0]:sim[1]], 'r')
         plt.legend()
         plt.show()
@@ -600,12 +601,7 @@ class TrendAnalysis(PatternAnalysis):
     
     def _getoutput(self, data, index):
         
-        ta = index[0]
-        tai = index[1]
-        taf = index[2]
-        amp = index[3]
-        gp = index[4]
-        gn = index[5]
+        ta, tai, taf, amp, gp, gn = index
  
         if self.parameter['show']:
             process._plotcusum(data, self.parameter['thre'], self.parameter['drift'],
@@ -692,12 +688,11 @@ class NodataAnalysis(PatternAnalysis):
         self.parameter['offset'] = '2H'
         self._timesheet = {'S':1, 'M':60, 'H':3600, 'D':24*3600}
         
-    def _process(self, data):
-        
+    def _process(self, data):        
         slot = int(self.parameter['offset'][:-1]) * \
-                    self._timesheet[self.parameter['offset'][-1]]
-        pdata = data.dropna(inplace = True)
-        periods = pdata.index[1:] - pdata.index[:-1]
+                    self._timesheet[self.parameter['offset'][-1]] # convert parameter to seconds
+        pdata = data.dropna(inplace = True) # drop NaN data
+        periods = pdata.index[1:] - pdata.index[:-1] # time period in real data
         temp = np.where(periods.total_seconds() > slot)
         return temp + 1
         
