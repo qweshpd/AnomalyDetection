@@ -206,17 +206,28 @@ def getalarm(timesa, timestamp, p = 0, d = 0, q = 0, max = 10, show = False):
         plt.legend()
         plt.show()
 
-def _rectsdiff(timesdiff, diffhead = []):
-    '''Recover array given difference, index and head data.'''
-    l = len(diffhead)
-    if l == 0:
-        return timesdiff
-    elif l == 1:
-        return np.insert(np.cumsum(timesdiff), 0, 0) + diffhead[0]
-    elif l == 2:
-        tsrecover1 = np.insert(np.cumsum(timesdiff), 0, 0) + diffhead[0]
-        return np.insert(np.cumsum(tsrecover1), 0, 0) + diffhead[1]
+    def _rectsdiff(self, timesdiff, diffhead = []):
+        '''
+        Recover array given difference, index and head data.
+        
+        Parameters
+        ----------
+        timesediff : 1-D pandas Series object or numpy array
+            The differenced time-series data.
+        diffhead : number, list
+            List of head data before differenced.
+        '''
 
+        l = len(diffhead)
+        if l == 0:
+            timeseries = timesdiff
+        elif l == 1:
+            timeseries = np.insert(np.cumsum(timesdiff), 0, 0) + diffhead[0]
+        elif l == 2:
+            tsrecover1 = np.insert(np.cumsum(timesdiff), 0, 0) + diffhead[0]
+            timeseries = np.insert(np.cumsum(tsrecover1), 0, 0) + diffhead[1]
+        
+        return timeseries
 def _plotarima(timeseries, model):
     try:
         import matplotlib.pylab as plt
