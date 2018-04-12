@@ -15,14 +15,11 @@ rcParams['figure.figsize'] = 15, 6
 import warnings
 warnings.filterwarnings("ignore")
 
-'''
-   Required library: numpy, pandas, statsmodels.
-   Valid only for one-dimension-time-series data. 
-'''
-
 class AutoARIAM(object):
     '''
     Compute parameters p,q,dautomatically based on data features.
+    Required library: numpy, pandas, statsmodels.
+    Valid only for one-dimension-time-series data. 
     
     Attributes
     ----------
@@ -35,7 +32,7 @@ class AutoARIAM(object):
     '''
     
     def __init__(self):
-        self.parameter = {}
+        self.valid = False
 
     def _valid_test(self, timeseries, nlag = 5, conf = '1%', pvalue = 0.05, 
                   show = True):
@@ -56,10 +53,15 @@ class AutoARIAM(object):
         show : bool, optional (default = True)
             If True, print Dickey-Fuller test result.
         '''
+        
+        self.nlag = nlag
+        self.conf = conf
+        self.pvalue = pvalue
+        
         if not conf in ['1%', '5%', '10%']:
             raise KeyError('Please input a valid confidence level!')
             
-        if acorr_ljungbox(timeseries, lags = nlag)[1][-1:][0] > pvalue:
+        if acorr_ljungbox(timeseries, lags = nlag)[1][-1:][0] > self.pvalue:
             raise ValueError('White noise series!')
             
         ts = np.array(timeseries)                 
@@ -74,10 +76,11 @@ class AutoARIAM(object):
             print('Results of Dickey-Fuller Test:')
             print(dfoutput)
         
-        if dftest[0] < dftest[4][conf]:
+        if dftest[0] < dftest[4][self.conf]:
+            self.valid = True
             return dfoutput, True
         else:
-            print('Not stationary under confidence limits ' + conf + 
+            print('Not stationary under confidence limits ' + self.conf + 
                   '. Please try a larger one.')
             return dfoutput, False
 
@@ -101,26 +104,31 @@ class AutoARIAM(object):
         '''
         res = self._valid_test(timeseries, nlag = nlag, conf = conf, 
                             pvalue = pvalue, show = False)
-        if res[1]:
-            validts = timeseries, 0    # if stationary, return d = 0
+        if res[1]:    # if stationary, return d = 0
+            self.validts = timeseries
+            self.d = 0 
         else:    # if not stationary, try difference once
             tempts = np.diff(timeseries, n = 1)
             res = self._valid_test(tempts, nlag = nlag, conf = conf, 
                             pvalue = pvalue, show = False)
             if res[1]:
-                validts =  tempts, 1, timeseries[0]
+                self.validts =  tempts
+                self.d = 1
+                self.head = timeseries[0]
             else:
                 tempts2 = np.diff(timeseries, n = 2)
                 res = self._valid_test(tempts2, nlag = nlag, conf = conf, 
                                         pvalue = pvalue, show = False)
                 if res[1]:
-                    validts = tempts2, 2, tempts[0], timeseries[0]
+                    self.validts = tempts2
+                    self.d = 2
+                    self.head = [tempts[0], timeseries[0]]
                 else:
                     raise ValueError('Exceed Dfferential Limit! Not fit for ARIMA!')
         
         if show:
             # Determing rolling statistics
-            ts = pd.Series(validts[0])
+            ts = pd.Series(self.validts)
             rolmean = pd.rolling_mean(ts, window = 12)
             rolstd = pd.rolling_std(ts, window = 12)
             
@@ -130,12 +138,13 @@ class AutoARIAM(object):
             plt.plot(rolmean, 'r', label = 'Rolling Mean')
             plt.plot(rolstd, 'k', label = 'Rolling Std')
             plt.legend(loc = 'best')
-            plt.title('Rolling Mean & Standard Deviation After %d Difference.' % validts[1])
+            plt.title('Rolling Mean & Standard Deviation After %d Difference.' 
+                      % self.d)
             plt.show(block = False)
             print('Results of Dickey-Fuller Test:')
             print(res[0])
-            
-        return validts
+
+        return self.validts
     
     def _get_pq(self, timeseries, max_ar = 10, max_ma = 10, ic = 'aic'):
         '''
@@ -152,42 +161,87 @@ class AutoARIAM(object):
         ic : string
             Information criteria to report.
         '''
-
+        
         print('Maximum total runtime of 5 minutes are expected.')
         print('Calculating... Please be patient and wait your results.')
         order = st.arma_order_select_ic(timeseries, max_ar = max_ar, 
                                         max_ma = max_ma, ic = ic)
         if ic == 'aic':
-            return order.aic_min_order
+            self.p, self.q = order.aic_min_order
         elif ic == 'bic':
-            return order.bic_min_order
+            self.p, self.q = order.bic_min_order
+        
+        return self.p, self.q
 
-def fitARIMA(times, confid = '1%', p = 0, d = 0, q = 0, max = 10, foreday = 1, show = False):
-    '''Fit ARIMA model.'''
-    timeseries = np.array(times)
-    # timeseries = np.log(np.array(times))
-    if p == 0 and q == 0:
-        (p, q) = getpq(timeseries, max = max)
-    indextemp = getd(timeseries, confid = confid)
-    d = indextemp[1]
-    tstemp = np.diff(timeseries, d)
-    model = ARIMA(timeseries, order = (p, d, q))
-    try:
-        results_ARIMA = model.fit(disp = -1) 
-    except np.linalg.LinAlgError:
-        print('SVD did not converge! Please try another p, d, q value.')
+    def fit(self, tsdata, max_ar = 10, max_ma = 10, ic = 'aic', 
+            nlag = 5, conf = '1%', pvalue = 0.05, show = False, **kwargs):
+        '''
+        Calculate parameter p,q for ARIMA model based on AIC or BIC order.
+        
+        Parameters
+        ----------
+        tsdata : 1-D pandas Series object or numpy array
+            The time-series to which to fit the ARIMA estimator.
+        max_q : integer 
+            Maximum number of q to fit.
+        max_p : integer 
+            Maximum number of p to fit.
+        ic : string
+            Information criteria to report.
+        nlag : integer 
+            The largest lag to be considered for Ljungbox test.  
+        conf : number
+            Confidence level for statistical test.      
+        pvalue : float
+            Threshold to which test result is compared.
+        show : bool, optional (default = True)
+            If True, print Dickey-Fuller test result.
+        kwargs : number
+            Pre-given p,d,q values.
+        '''
+        timeseries = np.array(tsdata)     
+        
+        if 'd' in kwargs.keys():
+            self.d = kwargs['d']
+            if self.d == 1:
+                self.head = timeseries[0]
+            elif self.d == 2:
+                self.head = [timeseries[1] - timeseries[0], timeseries[0]]
+        else:
+            _ = self._get_d(timeseries, nlag = nlag, conf = conf, 
+                            pvalue = pvalue, show = show)
+            
+        if ('p' in kwargs.keys()) and ('q' in kwargs.keys()):
+            self.p = kwargs['p']
+            self.q = kwargs['q']
+        else:
+            _, _ = self._get_pq(timeseries, max_ar = max_ar, max_ma = max_ma, 
+                                ic = ic)
+        model = ARIMA(self.validts, order = (self.p, self.d, self.q))
+        
+        try:
+            results_ARIMA = model.fit(disp = -1) 
+        except np.linalg.LinAlgError:
+            print('SVD did not converge! Please try another p, d, q value.')
+        except ValueError:
+            print('Please check your input.')
+            print('You should induce invertibility or choose a different model order.')
+        else:
+#            if 'foreday' in kwargs.keys():
+#                forecast_ARIMA = results_ARIMA.forecast(kwargs['foreday'])
+            fitmodel = self._rectsdiff(results_ARIMA.fittedvalues, 
+                                       diffhead = self.head)
+            
+            
+            
+            
+            if show:
+                self._plotarima(np.array(timeseries), abs(fitmodel))
+                print('p = %d, q = %d'% (self.p, self.q))
+    
+            return pd.Series(fitmodel, index = times.index) #, forecast_ARIMA_log
+        
         return None
-    except ValueError:
-        print('Please check your input. You should induce invertibility or choose a different model order.')
-        return None
-    else:
-        #forecast_ARIMA_log = results_ARIMA.forecast(12 * foreday)
-        model = _rectsdiff(results_ARIMA.fittedvalues, diffhead = indextemp[2:])
-        if show:
-            _plotarima(np.array(times), abs(model))
-            print('p = %d,'%p + 'q = %d'% q)
-
-        return pd.Series(model, index = times.index) #, forecast_ARIMA_log
 
 def getalarm(timesa, timestamp, p = 0, d = 0, q = 0, max = 10, show = False):
     '''Print alarm timestamps'''
@@ -228,19 +282,24 @@ def getalarm(timesa, timestamp, p = 0, d = 0, q = 0, max = 10, show = False):
             timeseries = np.insert(np.cumsum(tsrecover1), 0, 0) + diffhead[1]
         
         return timeseries
-def _plotarima(timeseries, model):
-    try:
-        import matplotlib.pylab as plt
-    except:
-        print('matplotlib is not available.')
-    else:
+    
+    def _plotarima(self, timeseries):
+        '''
+        Plot fitted ARIMA model versus original data.
+        
+        Parameters
+        ----------
+        timesediff : 1-D pandas Series object or numpy array
+            The differenced time-series data.
+        '''
+
         plt.figure()
         plt.subplot(211)
-        plt.plot(timeseries, color = 'orange', label = 'Original')
-        plt.title('RSS: %.4f'% sum((model - timeseries)** 2))
+        plt.plot(timeseries, 'o', label = 'Original')
+        plt.title('RSS: %.4f'% sum((self.model - timeseries)** 2))
         plt.legend()
         plt.subplot(212)
-        plt.plot(model, color='black', label = 'Model') 
+        plt.plot(self.model, 'k', label = 'Model') 
         plt.legend()
         plt.show()
 
