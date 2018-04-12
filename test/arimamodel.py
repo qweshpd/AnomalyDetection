@@ -137,11 +137,30 @@ class AutoARIAM(object):
             
         return validts
     
-def getpq(timeseries, max = 10):
-    '''Get parameter p,q based on AIC.'''
-    print('Maximum total runtime of 5 minutes are expected. Please be patient and wait your results.')
-    order = st.arma_order_select_ic(timeseries, max_ar = max, max_ma = max, ic=['aic', 'bic'])
-    return order.aic_min_order
+    def _get_pq(self, timeseries, max_ar = 10, max_ma = 10, ic = 'aic'):
+        '''
+        Calculate parameter p,q for ARIMA model based on AIC or BIC order.
+        
+        Parameters
+        ----------
+        timeseries : 1-D pandas Series object or numpy array
+            The time-series to which to fit the ARIMA estimator.
+        max_q : integer 
+            Maximum number of q to fit.
+        max_p : integer 
+            Maximum number of p to fit.
+        ic : string
+            Information criteria to report.
+        '''
+
+        print('Maximum total runtime of 5 minutes are expected.')
+        print('Calculating... Please be patient and wait your results.')
+        order = st.arma_order_select_ic(timeseries, max_ar = max_ar, 
+                                        max_ma = max_ma, ic = ic)
+        if ic == 'aic':
+            return order.aic_min_order
+        elif ic == 'bic':
+            return order.bic_min_order
 
 def fitARIMA(times, confid = '1%', p = 0, d = 0, q = 0, max = 10, foreday = 1, show = False):
     '''Fit ARIMA model.'''
