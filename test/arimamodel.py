@@ -37,7 +37,7 @@ class AutoARIAM(object):
     def __init__(self):
         self.parameter = {}
 
-    def valid_test(self, timeseries, nlag = 5, confid = '1%', pvalue = 0.05, 
+    def _valid_test(self, timeseries, nlag = 5, conf = '1%', pvalue = 0.05, 
                   show = True):
         '''
         Test whether time series data fit for ARIMA model. Ljungbox test and
@@ -52,57 +52,91 @@ class AutoARIAM(object):
         conf : number
             Confidence level for statistical test.      
         pvalue : float
-            Threshold to which Dickey-Fuller test result is compared.
-        show : bool, optional (default = False)
+            Threshold to which test result is compared.
+        show : bool, optional (default = True)
             If True, print Dickey-Fuller test result.
         '''
-        if not confid in ['1%', '5%', '10%']:
-            raise ValueError('Please input a valid confidence level!')
+        if not conf in ['1%', '5%', '10%']:
+            raise KeyError('Please input a valid confidence level!')
             
         if acorr_ljungbox(timeseries, lags = nlag)[1][-1:][0] > pvalue:
             raise ValueError('White noise series!')
             
         ts = np.array(timeseries)                 
         dftest = st.adfuller(ts, 1) # Perform Dickey-Fuller test
-          
+
+        dfoutput = pd.Series(dftest[0:4], index = ['Test Statistic',
+                    'p-value','#Lags Used','Number of Observations Used'])
+        for key,value in dftest[4].items():
+            dfoutput['Critical Value (%s)'%key] = value
+            
         if show:
-            dfoutput = pd.Series(dftest[0:4], index = ['Test Statistic',
-                        'p-value','#Lags Used','Number of Observations Used'])
             print('Results of Dickey-Fuller Test:')
-            for key,value in dftest[4].items():
-                dfoutput['Critical Value (%s)'%key] = value
             print(dfoutput)
         
-        if dftest[0] < dftest[4][confid]:
-            return True	
+        if dftest[0] < dftest[4][conf]:
+            return dfoutput, True
         else:
-            print('Not stationary under confidence limits ' + confid + 
+            print('Not stationary under confidence limits ' + conf + 
                   '. Please try a larger one.')
-            return False
+            return dfoutput, False
 
-def getd(timeseries, confid = '1%'):
-    '''Get parameter d. '''
-    if not confid:
-        confid = '1%'
-    # If stationary, return d = 0
-    if test_stat(timeseries, confid):
-        return timeseries, 0
-    else:
-        tempts = np.diff(timeseries, n = 1)
-        try:
-            test_stat(tempts, confid)
-        except ValueError:
-            print('White noise series! Not fit ARIMA')
-        else:
-            if test_stat(tempts, confid):
-                return tempts, 1, timeseries[0]
+    def _get_d(self, timeseries, nlag = 5, conf = '1%', pvalue = 0.05, 
+                  show = True):
+        '''
+        Calculate parameter d for difference order.
+        
+        Parameters
+        ----------
+        timeseries : 1-D pandas Series object or numpy array
+            The time-series to which to fit the ARIMA estimator.
+        nlag : integer 
+            The largest lag to be considered for Ljungbox test.  
+        conf : number
+            Confidence level for statistical test.      
+        pvalue : float
+            Threshold to which test result is compared.
+        show : bool, optional (default = True)
+            If True, print Dickey-Fuller test result.
+        '''
+        res = self._valid_test(timeseries, nlag = nlag, conf = conf, 
+                            pvalue = pvalue, show = False)
+        if res[1]:
+            validts = timeseries, 0    # if stationary, return d = 0
+        else:    # if not stationary, try difference once
+            tempts = np.diff(timeseries, n = 1)
+            res = self._valid_test(tempts, nlag = nlag, conf = conf, 
+                            pvalue = pvalue, show = False)
+            if res[1]:
+                validts =  tempts, 1, timeseries[0]
             else:
-                temptts = np.diff(tempts, n = 1)
-                if test_stat(temptts, confid):
-                    return temptts, 2, tempts[0], timeseries[0]
+                tempts2 = np.diff(timeseries, n = 2)
+                res = self._valid_test(tempts2, nlag = nlag, conf = conf, 
+                                        pvalue = pvalue, show = False)
+                if res[1]:
+                    validts = tempts2, 2, tempts[0], timeseries[0]
                 else:
-                    print('Exceed Differential Limit! Not fit ARIAM!')
-
+                    raise ValueError('Exceed Dfferential Limit! Not fit for ARIMA!')
+        
+        if show:
+            # Determing rolling statistics
+            ts = pd.Series(validts[0])
+            rolmean = pd.rolling_mean(ts, window = 12)
+            rolstd = pd.rolling_std(ts, window = 12)
+            
+            # Plot rolling statistics:
+            plt.figure()
+            plt.plot(ts, 'b', label = 'Original')
+            plt.plot(rolmean, 'r', label = 'Rolling Mean')
+            plt.plot(rolstd, 'k', label = 'Rolling Std')
+            plt.legend(loc = 'best')
+            plt.title('Rolling Mean & Standard Deviation After %d Difference.' % validts[1])
+            plt.show(block = False)
+            print('Results of Dickey-Fuller Test:')
+            print(res[0])
+            
+        return validts
+    
 def getpq(timeseries, max = 10):
     '''Get parameter p,q based on AIC.'''
     print('Maximum total runtime of 5 minutes are expected. Please be patient and wait your results.')
