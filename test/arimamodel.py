@@ -24,49 +24,61 @@ class AutoARIAM(object):
     '''
     Compute parameters p,q,dautomatically based on data features.
     
-    Attributes:
+    Attributes
+    ----------
     set_para: Set parameters.
     get_para: Get parameters.
     test_stat: Stationary test.
-    get_d:
-    get_pq:
+    get_d: Get proper d value for stational timeseries.
+    get_pq: Get p,q values to fit ARIMA model.
     fit: Fit ARIMA model onto data.
-    
-    Parameters
-    ----------
-    conf : number
-        Confidence level for statistical test.
-    nlag: number
-    
-    pvalue: number
-        
     '''
+    
     def __init__(self):
         self.parameter = {}
 
 
-def test_stat(timeseries, confid = '1%', show = False,  nlag = 5, pvalue = 0.05):
-    '''Stationary Test.'''
-    timeseries = np.array(timeseries)
-    # Perform Dickey-Fuller test:
-    dftest = st.adfuller(timeseries, 1)
-    
-    if acorr_ljungbox(timeseries, lags = nlag)[1][-1:][0] > pvalue:
-        raise ValueError('White noise series!')
-        return True
-    else:    
-        if dftest[0] < dftest[4][confid]:
-            return True	
-        else:
-            print('Not stationary under confidence limits ' + confid + '. Please try a larger one.')
-    return False
-    
-    if show:
-        foutput = pd.Series(dftest[0:4], index=['Test Statistic','p-value','#Lags Used','Number of Observations Used'])
-        print('Results of Dickey-Fuller Test:')
-        for key,value in dftest[4].items():
-            dfoutput['Critical Value (%s)'%key] = value
-        print(dfoutput)
+#
+    def test_stat(self, timeseries, confid = '1%', nlag = 5, pvalue = 0.05, 
+                  show = False):
+        '''
+        Stationary Test.
+        
+        Parameters
+        ----------
+        timeseries : 1-D pandas Series object or numpy array
+            The time-series to which to fit the ARIMA estimator.
+        conf : number
+            Confidence level for statistical test.
+        nlag : integer 
+            The largest lag to be considered.        
+        pvalue : float
+            Threshold to which Dickey-Fuller test result is compared.
+        show : bool, optional (default = False)
+            If True, plot data in matplotlib figure.
+        '''
+        
+        ts = np.array(timeseries)
+        dftest = st.adfuller(ts, 1) # Perform Dickey-Fuller test:
+        
+        if acorr_ljungbox(timeseries, lags = nlag)[1][-1:][0] > pvalue:
+            raise ValueError('White noise series!')
+            return True
+        else:    
+            if dftest[0] < dftest[4][confid]:
+                return True	
+            else:
+                print('Not stationary under confidence limits ' + confid + 
+                      '. Please try a larger one.')
+        return False
+        
+        if show:
+            dfoutput = pd.Series(dftest[0:4], index=['Test Statistic',
+                        'p-value','#Lags Used','Number of Observations Used'])
+            print('Results of Dickey-Fuller Test:')
+            for key,value in dftest[4].items():
+                dfoutput['Critical Value (%s)'%key] = value
+            print(dfoutput)
 
 def getd(timeseries, confid = '1%'):
     '''Get parameter d. '''
