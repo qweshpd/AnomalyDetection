@@ -239,23 +239,6 @@ class AutoARIAM(object):
 
         return pd.Series(self.fitmodel, index = tsdata.index)
 
-def getalarm(timesa, timestamp, p = 0, d = 0, q = 0, max = 10, show = False):
-    '''Print alarm timestamps'''
-    mean = np.mean(timesa)
-    ts_model = abs(fitARIMA(timesa, p = p, q = q, show = show))
-    anomal = np.where((timesa > 1.5 * ts_model) & (timesa > mean))[0]
-    # anomal = np.where(ts > 2 * pd.Series(ts_model).shift(periods = -1))[0]
-    print('Time')
-    for i in anomal:
-        print(timestamp[i])
-    if show:
-        plt.figure()
-        plt.plot(timesa, color = 'orange', label = 'Original')
-        plt.plot(ts_model, color='black', label = 'Model')
-        # plt.scatter(anomal, [timesa[i] for i in anomal], color = 'red', label = 'Anomal')
-        plt.legend()
-        plt.show()
-
     def _rectsdiff(self, timesdiff, diffhead = []):
         '''
         Recover array given difference, index and head data.
@@ -298,6 +281,35 @@ def getalarm(timesa, timestamp, p = 0, d = 0, q = 0, max = 10, show = False):
         plt.plot(self.model, 'k', label = 'Model') 
         plt.legend()
         plt.show()
+        
+#    
+#    def _getalarm(self, tsdata, model, show = False):
+#        '''
+#        Get and print alarm timestamps based on fitted model.
+#        
+#        Parameters
+#        ----------
+#        tsdata : 1-D pandas Series object or numpy array
+#            The time-series to which to fit the ARIMA estimator.
+#        model : 1-D pandas Series object or numpy array
+#            Fitted model or baseline to which original data is compared to.
+#        show : bool, optional (default = True)
+#            If True, print Dickey-Fuller test result.
+#        '''
+#        mean = np.mean(timesa)
+#        anomal = np.where((timesa > 1.5 * ts_model) & (timesa > mean))[0]
+#        # anomal = np.where(ts > 2 * pd.Series(ts_model).shift(periods = -1))[0]
+#        print('Time')
+#        for i in anomal:
+#            print(timestamp[i])
+#        if show:
+#            plt.figure()
+#            plt.plot(timesa, color = 'orange', label = 'Original')
+#            plt.plot(ts_model, color='black', label = 'Model')
+#            # plt.scatter(anomal, [timesa[i] for i in anomal], color = 'red', label = 'Anomal')
+#            plt.legend()
+#            plt.show()
+
 
 
 
