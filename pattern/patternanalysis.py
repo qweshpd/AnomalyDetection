@@ -691,7 +691,7 @@ class NodataAnalysis(PatternAnalysis):
     def _process(self, data):        
         slot = int(self.parameter['offset'][:-1]) * \
                     self._timesheet[self.parameter['offset'][-1]] # convert parameter to seconds
-        pdata = data.dropna(inplace = True) # drop NaN data
+        pdata = data.dropna() # drop NaN data
         periods = pdata.index[1:] - pdata.index[:-1] # time period in real data
         temp = np.where(periods.total_seconds() > slot)
         return temp + 1
@@ -703,4 +703,5 @@ class NodataAnalysis(PatternAnalysis):
             print('Unexpected error happended %d times.' % len(index))
             print('Initial Time \t\t\tFinal Time')
             for ind in index:
-                print(str(data.index[ind - 1]) + '\t' + str(data.index[ind]))
+                print(data.index[ind - 1].strftime('%Y-%m-%d-%H-%M-%S') \
+                      + '\t' + data.index[ind].strftime('%Y-%m-%d-%H-%M-%S') )
