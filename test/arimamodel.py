@@ -197,7 +197,7 @@ class AutoARIAM(object):
         show : bool, optional (default = True)
             If True, print Dickey-Fuller test result.
         kwargs : number
-            Pre-given p,d,q values.
+            Pre-given p,d,q values, foredays to forcast.
         '''
         timeseries = np.array(tsdata)     
         
@@ -227,21 +227,17 @@ class AutoARIAM(object):
             print('Please check your input.')
             print('You should induce invertibility or choose a different model order.')
         else:
-#            if 'foreday' in kwargs.keys():
-#                forecast_ARIMA = results_ARIMA.forecast(kwargs['foreday'])
-            fitmodel = self._rectsdiff(results_ARIMA.fittedvalues, 
+            self.fitmodel = self._rectsdiff(results_ARIMA.fittedvalues, 
                                        diffhead = self.head)
-            
-            
-            
-            
             if show:
-                self._plotarima(np.array(timeseries), abs(fitmodel))
+                self._plotarima(np.array(timeseries), abs(self.fitmodel))
                 print('p = %d, q = %d'% (self.p, self.q))
-    
-            return pd.Series(fitmodel, index = times.index) #, forecast_ARIMA_log
-        
-        return None
+
+        if 'fore' in kwargs.keys():
+            self.forecast = results_ARIMA.forecast(kwargs['fore'])
+            return pd.Series(self.fitmodel, index = tsdata.index), self.forecast
+
+        return pd.Series(self.fitmodel, index = tsdata.index)
 
 def getalarm(timesa, timestamp, p = 0, d = 0, q = 0, max = 10, show = False):
     '''Print alarm timestamps'''
