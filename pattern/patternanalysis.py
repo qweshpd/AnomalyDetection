@@ -703,5 +703,5 @@ class NodataAnalysis(PatternAnalysis):
             print('Unexpected error happended %d times.' % len(index))
             print('Initial Time \t\t\tFinal Time')
             for ind in index:
-                print(data.index[ind - 1].strftime('%Y-%m-%d-%H-%M-%S') \
-                      + '\t' + data.index[ind].strftime('%Y-%m-%d-%H-%M-%S') )
+                print(data.index[ind - 1].strftime('%Y-%m-%d %H:%M:%S') \
+                      + '\t' + data.index[ind].strftime('%Y-%m-%d %H:%M:%S') )
