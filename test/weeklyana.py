@@ -26,7 +26,7 @@ class WeeklyAnalysis(object):
         data : 1D array like 
             Data to be analyzed
         index : 1D array like DatetimeIndex
-            Timestamp of data. Must be of the same size.
+            Start and end date of data.
         freq : integer
             Frequency of data collected. Currently support only int times of 
             hourly data.
@@ -38,7 +38,10 @@ class WeeklyAnalysis(object):
         self.index = index
         self.freq = freq
         self.holiday = holiday
-
+        self.num = int(24/freq)
+        self.columns = [('0' + str(i) + ':00')[-2:] for i in np.arange(self.num)*freq]
+        self._get_df()
+        
     def _get_df(self):
         '''
         Transform pandas.Series data into pandas.DataFrame format.
@@ -54,10 +57,8 @@ class WeeklyAnalysis(object):
         '''
         index = pd.date_range(self.index[0].strftime('%Y-%m-%d'), 
                               self.index[1].strftime('%Y-%m-%d'))
-        num = int(24/self.freq)
-        col = ['hr' + str(i * self.freq) for i in range(num)]
-        tmp = np.array(self.data).reshape(len(index), num)
-        self.df = pd.DataFrame(tmp, columns = col, 
+        tmp = np.array(self.data).reshape(len(index), self.num)
+        self.df = pd.DataFrame(tmp, columns = self.columns, 
                           index = [date.strftime('%Y-%m-%d') for date in index])
         
         return self.df
@@ -78,19 +79,28 @@ class WeeklyAnalysis(object):
         daydf : numpy.array
             Formatted daily data.
         '''
-        self._get_df()
+        
         start = np.mod(date - self.index[0].weekday(), 7)
         ind = np.arange(start, (self.index[1] - self.index[0]).days, 7)
         dailydata = np.array(self.df)[ind]
-        
+        tmpind = list(np.array(self.df.index)[ind])
+        tmpinddel = [tmpind.index(i) for i in tmpind if i in self.holiday]
+        dailydata = np.delete(dailydata, tmpinddel, 0)
+        inde = np.delete(np.array(self.df.index)[ind], tmpinddel, 0)
+        ind = np.delete(ind, tmpinddel, 0)
+
         if show:
-            num = int(24/self.freq)
             plt.figure()
-            for i in np.arange(len(ind)):
-                plt.plot(np.linspace(1, num, num), dailydata[i, :])
-            plt.boxplot(dailydata)
+            for i in np.arange(dailydata.shape[0]):
+                plt.plot(np.linspace(1, self.num, self.num), 
+                         dailydata[i, :], label = inde[i])
+            plt.legend(loc = 'best')
+            pd.DataFrame(dailydata).boxplot()
             plt.title('Daily traffic on %s' % _weekday[date])
-        return dailydata
+            plt.show()
+        
+        return pd.DataFrame(dailydata, index = self.df.index[ind],
+                            columns = self.columns)
     
     def weekfit(self, show = False):
         '''
@@ -106,4 +116,8 @@ class WeeklyAnalysis(object):
         daydf : pandas.DataFrame
             Formatted data.
         '''
-                
+        for i in np.arange(7):
+            setattr(self, _weekday[i], self._get_daily(self, i))
+        
+        
+        
