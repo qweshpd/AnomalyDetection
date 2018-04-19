@@ -76,7 +76,7 @@ class WeeklyAnalysis(object):
             Formatted data.
         '''
         self._get_df()
-        start = np.mod(7 - self.index[0].weekday(), 7)
+        start = np.mod(date - self.index[0].weekday(), 7)
         ind = np.arange(start, (self.index[1] - self.index[0]).days, 7)
         dailydata = np.array(self.df)[ind]
         
