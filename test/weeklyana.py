@@ -39,7 +39,7 @@ class WeeklyAnalysis(object):
         self.freq = freq
         self.holiday = holiday
         self.num = int(24/freq)
-        self.columns = [('0' + str(i) + ':00')[-2:] for i in np.arange(self.num)*freq]
+        self.columns = [('0' + str(i) + ':00')[-5:] for i in np.arange(self.num)*freq]
         self._get_df()
         
     def _get_df(self):
@@ -81,7 +81,7 @@ class WeeklyAnalysis(object):
         '''
         
         start = np.mod(date - self.index[0].weekday(), 7)
-        ind = np.arange(start, (self.index[1] - self.index[0]).days, 7)
+        ind = np.arange(start, (self.index[1] - self.index[0]).days + 1, 7)
         dailydata = np.array(self.df)[ind]
         tmpind = list(np.array(self.df.index)[ind])
         tmpinddel = [tmpind.index(i) for i in tmpind if i in self.holiday]
@@ -94,7 +94,7 @@ class WeeklyAnalysis(object):
             for i in np.arange(dailydata.shape[0]):
                 plt.plot(np.linspace(1, self.num, self.num), 
                          dailydata[i, :], label = inde[i])
-            plt.legend(loc = 'best')
+            plt.legend().draggable()
             pd.DataFrame(dailydata).boxplot()
             plt.title('Daily traffic on %s' % _weekday[date])
             plt.show()
@@ -102,22 +102,27 @@ class WeeklyAnalysis(object):
         return pd.DataFrame(dailydata, index = self.df.index[ind],
                             columns = self.columns)
     
-    def weekfit(self, show = False):
+    def weekfit(self):
         '''
-        Get historical data on a specific weekday or weekend.    
+        Transfer data into each weekday and holiday.   
         
         Parameters
         ----------
         show : boolean
             If True, plot daily data in matplotlib figure.
         
-        Returns
-        ----------
-        daydf : pandas.DataFrame
-            Formatted data.
         '''
         for i in np.arange(7):
-            setattr(self, _weekday[i], self._get_daily(self, i))
+            setattr(self, _weekday[i], self._get_daily(i))
+            
+        # Offday = Saturday, Sunday and Holidays
+        start = np.mod(5 - self.index[0].weekday(), 7)
+        ind = np.arange(start, (self.index[1] - self.index[0]).days + 1, 7)
+        tmp = np.append(ind, ind + 1)
+        for day in self.holiday:
+            tmp = np.append(tmp, np.where(np.array(self.df.index) == day)[0])
+        tmp.sort()
+        self.Offday = self.df.loc[self.df.index[tmp]]
         
         
         
