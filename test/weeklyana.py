@@ -8,6 +8,9 @@ import matplotlib.pylab as plt
 from matplotlib.pylab import rcParams
 rcParams['figure.figsize'] = 15, 6
 
+_weekday = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", 
+             "Saturday","Sunday"]
+
 class WeeklyAnalysis(object):
     '''
     Analyze 1-D timeseries data based on weekliy information.
@@ -72,8 +75,8 @@ class WeeklyAnalysis(object):
         
         Returns
         ----------
-        daydf : pandas.DataFrame
-            Formatted data.
+        daydf : numpy.array
+            Formatted daily data.
         '''
         self._get_df()
         start = np.mod(date - self.index[0].weekday(), 7)
@@ -81,10 +84,26 @@ class WeeklyAnalysis(object):
         dailydata = np.array(self.df)[ind]
         
         if show:
+            num = int(24/self.freq)
             plt.figure()
             for i in np.arange(len(ind)):
-                plt.plot(dailydata[i])
-                
+                plt.plot(np.linspace(1, num, num), dailydata[i, :])
+            plt.boxplot(dailydata)
+            plt.title('Daily traffic on %s' % _weekday[date])
         return dailydata
+    
+    def weekfit(self, show = False):
+        '''
+        Get historical data on a specific weekday or weekend.    
         
-
+        Parameters
+        ----------
+        show : boolean
+            If True, plot daily data in matplotlib figure.
+        
+        Returns
+        ----------
+        daydf : pandas.DataFrame
+            Formatted data.
+        '''
+                
