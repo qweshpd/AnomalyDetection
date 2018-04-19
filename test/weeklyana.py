@@ -8,7 +8,6 @@ import matplotlib.pylab as plt
 from matplotlib.pylab import rcParams
 rcParams['figure.figsize'] = 15, 6
 
-
 class WeeklyAnalysis(object):
     '''
     Analyze 1-D timeseries data based on weekliy information.
@@ -47,19 +46,45 @@ class WeeklyAnalysis(object):
         
         Returns
         ----------
-        
+        df : pandas.DataFrame
+            Formatted data.
         '''
-        sdate = self.index[0].strftime('%Y-%m-%d')
-        edate = self.index[-1].strftime('%Y-%m-%d')
-        index = pd.date_range(sdate, edate)
+        index = pd.date_range(self.index[0].strftime('%Y-%m-%d'), 
+                              self.index[1].strftime('%Y-%m-%d'))
         num = int(24/self.freq)
         col = ['hr' + str(i * self.freq) for i in range(num)]
         tmp = np.array(self.data).reshape(len(index), num)
-        df = pd.DataFrame(tmp, columns = col, 
+        self.df = pd.DataFrame(tmp, columns = col, 
                           index = [date.strftime('%Y-%m-%d') for date in index])
         
-        return df
-#%%
-
-
+        return self.df
+    
+    def _get_daily(self, date, show = False):
+        '''
+        Get historical data on a specific weekday or weekend.    
+        
+        Parameters
+        ----------       
+        date : integer from 0 to 6
+            Specific date.
+        show : boolean
+            If True, plot daily data in matplotlib figure.
+        
+        Returns
+        ----------
+        daydf : pandas.DataFrame
+            Formatted data.
+        '''
+        self._get_df()
+        start = np.mod(7 - self.index[0].weekday(), 7)
+        ind = np.arange(start, (self.index[1] - self.index[0]).days, 7)
+        dailydata = np.array(self.df)[ind]
+        
+        if show:
+            plt.figure()
+            for i in np.arange(len(ind)):
+                plt.plot(dailydata[i])
+                
+        return dailydata
+        
 
