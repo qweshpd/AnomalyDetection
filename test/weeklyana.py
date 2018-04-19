@@ -95,6 +95,7 @@ class WeeklyAnalysis(object):
                 plt.plot(np.linspace(1, self.num, self.num), 
                          dailydata[i, :], label = inde[i])
             plt.legend().draggable()
+            plt.ylim(0, 62000)
             pd.DataFrame(dailydata).boxplot()
             plt.title('Daily traffic on %s' % _weekday[date])
             plt.show()
@@ -124,5 +125,74 @@ class WeeklyAnalysis(object):
         tmp.sort()
         self.Offday = self.df.loc[self.df.index[tmp]]
         
+    def dailymodel(self, day = None, show = False):
+        '''
+        Build basic model based on historical data.   
         
+        Parameters
+        ----------
+        day : string, default = None
+            Return the specific model of that day, or entire week model if 
+            keep default.
+        show : boolean
+            If True, plot daily data in matplotlib figure.
+            
+        Returns
+        ----------
+        daymodel : pandas.DataFrame
+            
+        '''
+        # fit before modeling
+        if not hasattr(self, 'Offday'):
+            self.weekfit()
+        
+        tmp = getattr(self, day)
+        daymodel = pd.DataFrame(index = ['Ave', 'Max', 'Min', 'Std'])
+        for time in self.columns:
+            tmpdata = np.array(tmp[time])
+            mmax, mmin = np.percentile(tmp[time], [75, 25])
+            temp = tmpdata[np.where((tmpdata <= mmax  + 1.5 * (mmax - mmin)) & 
+                             (tmpdata >= mmin - 1.5 * (mmax - mmin)))]
+            daymodel[time] = [temp.mean(), temp.max(), 
+                              temp.min(),  temp.std()]
+        
+        if show:
+            plt.figure()
+            plt.plot(daymodel.loc['Ave'], 'b-')
+            plt.fill_between(self.columns, daymodel.loc['Ave'] + 3 * daymodel.loc['Std'], 
+                             daymodel.loc['Ave'] - 3 * daymodel.loc['Std'], 
+                             color = "#ff0000")
+                             
+            plt.show()
+            
+        return daymodel
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+        
+            
         
