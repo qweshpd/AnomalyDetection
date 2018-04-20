@@ -157,19 +157,21 @@ class WeeklyAnalysis(object):
                 daymodel[time] = [temp.mean(), temp.max(), 
                                   temp.min(),  temp.std()]
         elif day == 'weekly':
-            daymodel = np.array([])
+            daymodel = np.array([[],[],[],[]])
             col = []
             for date in _weekday[:5]:
-                daymodel = np.hstack(daymodel, 
-                                     np.array(self.dailymodel(day = date)))
+                daymodel = np.hstack([daymodel, 
+                                     np.array(self.dailymodel(day = date))])
                 col.append([date[:3] + i for i in self.columns])
-            daymodel = pd.DataFrame(daymodel, columns = col,
+            daymodel = pd.DataFrame(daymodel, columns = np.hstack(col),
                                     index = ['Ave', 'Max', 'Min', 'Std'])
         
         if show:
             plt.figure()
-            plt.plot(daymodel.loc['Ave'], '-', color = '#0072B2', label = 'Average')
-            plt.fill_between(self.columns, daymodel.loc['Ave'] + 3 * daymodel.loc['Std'], 
+            plt.plot(np.arange(daymodel.shape[1]), daymodel.loc['Ave'], 
+                     '-', color = '#0072B2', label = 'Average')
+            plt.fill_between(np.arange(daymodel.shape[1]), 
+                             daymodel.loc['Ave'] + 3 * daymodel.loc['Std'], 
                              daymodel.loc['Ave'] - 3 * daymodel.loc['Std'], 
                              color = '#87CEEB', label = 'Confidence Inerval')
             plt.legend().draggable()                    
