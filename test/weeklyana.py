@@ -3,6 +3,7 @@
 
 import numpy as np
 import pandas as pd
+import datetime
 
 import matplotlib.pylab as plt
 from matplotlib.pylab import rcParams
@@ -124,8 +125,36 @@ class WeeklyAnalysis(object):
             tmp = np.append(tmp, np.where(np.array(self.df.index) == day)[0])
         tmp.sort()
         self.Offday = self.df.loc[self.df.index[tmp]]
+    
+    def _somedaymodel(self, day):
+        '''
+        Build daily model.   
         
-    def dailymodel(self, day = None, show = False):
+        Parameters
+        ----------
+        day : string, default = None
+            Return the specific model of that day, or entire week model if 
+            keep default.
+            
+        Returns
+        ----------
+        daymodel : pandas.DataFrame
+            Model of a specfic day.
+        '''
+        tmp = getattr(self, day)
+        daymodel = pd.DataFrame(index = ['Ave', 'Max', 'Min', 'Std'])
+        for time in self.columns:
+            tmpdata = np.array(tmp[time])
+            mmax, mmin = np.percentile(tmp[time], [75, 25])
+            temp = tmpdata[np.where((tmpdata <= mmax  + 1.5 * (mmax - mmin)) & 
+                             (tmpdata >= mmin - 1.5 * (mmax - mmin)))]
+            daymodel[time] = [temp.mean(), temp.max(), 
+                              temp.min(),  temp.std()]
+        self.daymodel[day] = daymodel
+        return daymodel
+        
+        
+    def dailymodel(self, show = False):
         '''
         Build basic model based on historical data.   
         
@@ -146,26 +175,19 @@ class WeeklyAnalysis(object):
         if not hasattr(self, 'Offday'):
             self.weekfit()
         
-        if day in _weekday:
-            tmp = getattr(self, day)
-            daymodel = pd.DataFrame(index = ['Ave', 'Max', 'Min', 'Std'])
-            for time in self.columns:
-                tmpdata = np.array(tmp[time])
-                mmax, mmin = np.percentile(tmp[time], [75, 25])
-                temp = tmpdata[np.where((tmpdata <= mmax  + 1.5 * (mmax - mmin)) & 
-                                 (tmpdata >= mmin - 1.5 * (mmax - mmin)))]
-                daymodel[time] = [temp.mean(), temp.max(), 
-                                  temp.min(),  temp.std()]
-        elif day == 'weekly':
-            daymodel = np.array([[],[],[],[]])
-            col = []
-            for date in _weekday[:5]:
-                daymodel = np.hstack([daymodel, 
-                                     np.array(self.dailymodel(day = date))])
-                col.append([date[:3] + i for i in self.columns])
-            daymodel = pd.DataFrame(daymodel, columns = np.hstack(col),
-                                    index = ['Ave', 'Max', 'Min', 'Std'])
-        
+        self.daymodel = {}
+
+        daymodel = np.array([[],[],[],[]])
+        col = []
+        for date in _weekday:
+            daymodel = np.hstack([daymodel, 
+                                 np.array(self._somedaymodel(date))])
+            col.append([date[:3] + i for i in self.columns])
+        daymodel = pd.DataFrame(daymodel, columns = np.hstack(col),
+                                index = ['Ave', 'Max', 'Min', 'Std'])
+        _ = self._somedaymodel('Offday')
+        self.weekmodel = daymodel
+
         if show:
             plt.figure()
             plt.plot(np.arange(daymodel.shape[1]), daymodel.loc['Ave'], 
@@ -177,16 +199,16 @@ class WeeklyAnalysis(object):
             plt.legend().draggable()                    
             plt.grid()
             plt.show()
-            
+
         return daymodel
         
-    def fitmodel(self, day = None, show = True):
+    def fitmodel(self, data = None, show = True):
         '''
         Fit trained model to data, and get anomaly data point.   
         
         Parameters
         ----------
-        data :  
+        data :  pandas.Series data
             Data to test.
         show : boolean
             If True, plot daily data in matplotlib figure.
@@ -196,9 +218,44 @@ class WeeklyAnalysis(object):
         anomalies : numpy.array of strings
             Anomalies date and time.
         '''
+        if data is None:
+            tsdata = np.array(self.data)
+        else:
+            tsdata = np.array(data)
         
-        pass
-        
+        s = self.index[0].weekday()
+        e = self.index[1].weekday()
+        startday = self.index[0] - datetime.timedelta(s)
+        endday = self.index[1] + datetime.timedelta(7 - e)
+        itera = int((endday - startday).days / 7)
+        model = np.array(self.dailymodel())
+        for i in np.arange(itera - 1):
+            model = np.hstack((model, np.array(self.dailymodel())))
+        self.model = model[:, 12 * s:-((6 - e)*12)]
+
+        if show:
+            tmp = pd.date_range(self.index[0].strftime('%Y-%m-%d'), 
+                    (self.index[1]+datetime.timedelta(1)).strftime('%Y-%m-%d'),
+                    freq = str(self.freq) + 'H')[:-1]
+            below = self.model[0, :] - 3 * self.model[3, :]
+            above = self.model[0, :] + 3 * self.model[3, :]
+            plt.figure()
+            plt.plot(np.arange(len(tmp)), self.model[0, :], 
+                     '-', color = '#0072B2', label = 'Average')
+            plt.fill_between(np.arange(len(tmp)), above, below, 
+                            color = '#87CEEB', label = 'Confidence Inerval')
+            
+            ind1 = np.where((tsdata >= below) & (tsdata <= above))
+            ind2 = np.where((tsdata <= below) | (tsdata >= above))
+            
+            plt.scatter(ind1, tsdata[ind1], c = 'k', label = 'Normal')
+            plt.scatter(ind2, tsdata[ind2], c = 'r', label = 'Anomaly')
+            
+            plt.xticks(np.arange(len(tmp)), tmp)
+            plt.legend().draggable()                    
+#            plt.grid()
+            plt.show()   
+            
         
         
         
