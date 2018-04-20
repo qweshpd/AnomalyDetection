@@ -146,30 +146,56 @@ class WeeklyAnalysis(object):
         if not hasattr(self, 'Offday'):
             self.weekfit()
         
-        tmp = getattr(self, day)
-        daymodel = pd.DataFrame(index = ['Ave', 'Max', 'Min', 'Std'])
-        for time in self.columns:
-            tmpdata = np.array(tmp[time])
-            mmax, mmin = np.percentile(tmp[time], [75, 25])
-            temp = tmpdata[np.where((tmpdata <= mmax  + 1.5 * (mmax - mmin)) & 
-                             (tmpdata >= mmin - 1.5 * (mmax - mmin)))]
-            daymodel[time] = [temp.mean(), temp.max(), 
-                              temp.min(),  temp.std()]
+        if day in _weekday:
+            tmp = getattr(self, day)
+            daymodel = pd.DataFrame(index = ['Ave', 'Max', 'Min', 'Std'])
+            for time in self.columns:
+                tmpdata = np.array(tmp[time])
+                mmax, mmin = np.percentile(tmp[time], [75, 25])
+                temp = tmpdata[np.where((tmpdata <= mmax  + 1.5 * (mmax - mmin)) & 
+                                 (tmpdata >= mmin - 1.5 * (mmax - mmin)))]
+                daymodel[time] = [temp.mean(), temp.max(), 
+                                  temp.min(),  temp.std()]
+        elif day == 'weekly':
+            daymodel = np.array([])
+            col = []
+            for date in _weekday[:5]:
+                daymodel = np.hstack(daymodel, 
+                                     np.array(self.dailymodel(day = date)))
+                col.append([date[:3] + i for i in self.columns])
+            daymodel = pd.DataFrame(daymodel, columns = col,
+                                    index = ['Ave', 'Max', 'Min', 'Std'])
         
         if show:
             plt.figure()
-            plt.plot(daymodel.loc['Ave'], 'b-')
+            plt.plot(daymodel.loc['Ave'], '-', color = '#0072B2', label = 'Average')
             plt.fill_between(self.columns, daymodel.loc['Ave'] + 3 * daymodel.loc['Std'], 
                              daymodel.loc['Ave'] - 3 * daymodel.loc['Std'], 
-                             color = "#ff0000")
-                             
+                             color = '#87CEEB', label = 'Confidence Inerval')
+            plt.legend().draggable()                    
+            plt.grid()
             plt.show()
             
         return daymodel
         
+    def fitmodel(self, day = None, show = True):
+        '''
+        Fit trained model to data, and get anomaly data point.   
         
+        Parameters
+        ----------
+        data :  
+            Data to test.
+        show : boolean
+            If True, plot daily data in matplotlib figure.
+            
+        Returns
+        ----------
+        anomalies : numpy.array of strings
+            Anomalies date and time.
+        '''
         
-        
+        pass
         
         
         
