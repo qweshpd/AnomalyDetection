@@ -36,10 +36,16 @@ class WeeklyAnalysis(object):
         '''
         
         self.data = data
-        self.index = index
+        self.sdate = index[0]
+        self.edata = index[1]
+        self.lindex = pd.date_range(index[0].strftime('%Y-%m-%d'), 
+                                    index[1].strftime('%Y-%m-%d'))
+        self.sindex = pd.date_range(index[0].strftime('%Y-%m-%d'), 
+                                    index[1].strftime('%Y-%m-%d'),
+                                    freq = freq)
         self.freq = freq
         self.holiday = holiday
-        self.num = int(24/freq)
+        self.num = int(24 / freq)
         self.columns = [('0' + str(i) + ':00')[-5:] for i in np.arange(self.num)*freq]
         self._get_df()
         
@@ -56,11 +62,9 @@ class WeeklyAnalysis(object):
         df : pandas.DataFrame
             Formatted data.
         '''
-        index = pd.date_range(self.index[0].strftime('%Y-%m-%d'), 
-                              self.index[1].strftime('%Y-%m-%d'))
-        tmp = np.array(self.data).reshape(len(index), self.num)
+        tmp = np.array(self.data).reshape(len(self.lindex), self.num)
         self.df = pd.DataFrame(tmp, columns = self.columns, 
-                          index = [date.strftime('%Y-%m-%d') for date in index])
+                   index = [date.strftime('%Y-%m-%d') for date in self.lindex])
         
         return self.df
     
@@ -81,7 +85,7 @@ class WeeklyAnalysis(object):
             Formatted daily data.
         '''
         
-        start = np.mod(date - self.index[0].weekday(), 7)
+        start = np.mod(date - self.sdate.weekday(), 7)
         ind = np.arange(start, (self.index[1] - self.index[0]).days + 1, 7)
         dailydata = np.array(self.df)[ind]
         tmpind = list(np.array(self.df.index)[ind])
@@ -96,7 +100,8 @@ class WeeklyAnalysis(object):
                 plt.plot(np.linspace(1, self.num, self.num), 
                          dailydata[i, :], label = inde[i])
             plt.legend().draggable()
-            plt.ylim(0, 62000)
+            plt.ylim(0, int(str(int(str(int(max(self.data)))[:2]) + 2) \
+                            + str(int(max(self.data)))[2:]))
             pd.DataFrame(dailydata).boxplot()
             plt.title('Daily traffic on %s' % _weekday[date])
             plt.show()
@@ -118,7 +123,7 @@ class WeeklyAnalysis(object):
             setattr(self, _weekday[i], self._get_daily(i))
             
         # Offday = Saturday, Sunday and Holidays
-        start = np.mod(5 - self.index[0].weekday(), 7)
+        start = np.mod(5 - self.index[0].weekday(), 7) # Saturday start
         ind = np.arange(start, (self.index[1] - self.index[0]).days + 1, 7)
         tmp = np.append(ind, ind + 1)
         for day in self.holiday:
@@ -202,7 +207,7 @@ class WeeklyAnalysis(object):
 
         return daymodel
         
-    def fitmodel(self, data = None, show = True):
+    def fitmodel(self, data = None, hol = False, show = True):
         '''
         Fit trained model to data, and get anomaly data point.   
         
@@ -210,7 +215,9 @@ class WeeklyAnalysis(object):
         ----------
         data :  pandas.Series data
             Data to test.
-        show : boolean
+        hol: boolean, default = False
+            If True, take holiday effect into consideration.
+        show : boolean, default = True
             If True, plot daily data in matplotlib figure.
             
         Returns
@@ -218,46 +225,66 @@ class WeeklyAnalysis(object):
         anomalies : numpy.array of strings
             Anomalies date and time.
         '''
+        if not hasattr(self, 'daymodel'):
+            self.dailymodel()
+            
         if data is None:
             tsdata = np.array(self.data)
         else:
             tsdata = np.array(data)
-        
+            
+        tmp = pd.date_range(self.index[0].strftime('%Y-%m-%d'), 
+                (self.index[1] + datetime.timedelta(1)).strftime('%Y-%m-%d'))[:-1]
         s = self.index[0].weekday()
         e = self.index[1].weekday()
         startday = self.index[0] - datetime.timedelta(s)
         endday = self.index[1] + datetime.timedelta(7 - e)
         itera = int((endday - startday).days / 7)
         model = np.array(self.dailymodel())
+        
         for i in np.arange(itera - 1):
             model = np.hstack((model, np.array(self.dailymodel())))
-        self.model = model[:, 12 * s:-((6 - e)*12)]
+            
+        self.model = model[:, self.num * s:-((6 - e)*self.num)]
+        
+        if hol:
+            for i in np.arange(len(tmp)):
+                if tmp[i].strftime('%Y-%m-%d') in self.holiday:
+                    print(tmp[i].strftime('%Y-%m-%d'))
+                    print(self.model[:, i:i + self.num].shape)
+                    print(np.array(self.daymodel['Offday']).shape)
+                    print(i)
+                    self.model[:, i:i + self.num] = np.array(self.daymodel['Offday'])
 
         if show:
-            tmp = pd.date_range(self.index[0].strftime('%Y-%m-%d'), 
-                    (self.index[1]+datetime.timedelta(1)).strftime('%Y-%m-%d'),
-                    freq = str(self.freq) + 'H')[:-1]
             below = self.model[0, :] - 3 * self.model[3, :]
             above = self.model[0, :] + 3 * self.model[3, :]
             plt.figure()
-            plt.plot(np.arange(len(tmp)), self.model[0, :], 
+            plt.plot(np.arange(self.num * len(tmp)), self.model[0, :], 
                      '-', color = '#0072B2', label = 'Average')
-            plt.fill_between(np.arange(len(tmp)), above, below, 
+            plt.fill_between(np.arange(self.num * len(tmp)), above, below, 
                             color = '#87CEEB', label = 'Confidence Inerval')
             
             ind1 = np.where((tsdata >= below) & (tsdata <= above))
-            ind2 = np.where((tsdata <= below) | (tsdata >= above))
+            ind2 = np.where( (tsdata < below) | (tsdata > above) )
             
+#            df = pd.DataFrame()
+#            df['data'] = tsdata
+#            df['time'] = pd.date_range(self.index[0].strftime('%Y-%m-%d'), 
+#                (self.index[1] + datetime.timedelta(1)).strftime('%Y-%m-%d'),
+#                freq = '2H')[:-1]
+#            
+#            df[ind1].plot(kind = 'scatter', x = 'time', y = 'data', c = 'b')
+#            df[ind2].plot(kind = 'scatter', x = 'time', y = 'data', c = 'r')
             plt.scatter(ind1, tsdata[ind1], c = 'k', label = 'Normal')
             plt.scatter(ind2, tsdata[ind2], c = 'r', label = 'Anomaly')
             
-            plt.xticks(np.arange(len(tmp)), tmp)
+            plt.xticks(self.num * np.arange(len(tmp)),
+                       [i.strftime('%Y-%m-%d') for i in tmp])
             plt.legend().draggable()                    
-#            plt.grid()
+            plt.grid()
             plt.show()   
             
-        
-        
         
         
         
