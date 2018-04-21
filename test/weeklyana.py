@@ -39,8 +39,8 @@ class WeeklyAnalysis(object):
         self.sdate = index[0]
         self.edate = index[1]
         self.lindex = pd.date_range(index[0], index[1])
-        self.sindex = pd.date_range(index[0], index[1] + datetime.timedelta(1), 
-                                    freq = str(freq) +'H')
+        self.sindex = pd.date_range(index[0], index[1] + datetime.timedelta(1),
+                                    freq = str(freq) +'H')[:-1]
         self.freq = freq
         self.holiday = holiday
         self.num = int(24 / freq)
@@ -254,25 +254,16 @@ class WeeklyAnalysis(object):
             below = self.model[0, :] - 3 * self.model[3, :]
             above = self.model[0, :] + 3 * self.model[3, :]
             plt.figure()
-            plt.plot(np.arange(self.num * len(self.lindex)), self.model[0, :], 
-                     '-', color = '#0072B2', label = 'Average')
-            plt.fill_between(np.arange(self.num * len(self.lindex)), above, below, 
+            plt.plot(self.sindex, self.model[0, :], '-',
+                      color = '#0072B2', label = 'Average')
+            plt.fill_between(self.sindex, above, below, 
                             color = '#87CEEB', label = 'Confidence Inerval')
             
             ind1 = np.where((tsdata >= below) & (tsdata <= above))
             ind2 = np.where( (tsdata < below) | (tsdata > above) )
             
-#            df = pd.DataFrame()
-#            df['data'] = tsdata
-#            df['time'] = pd.date_range(self.index[0].strftime('%Y-%m-%d'), 
-#                (self.index[1] + datetime.timedelta(1)).strftime('%Y-%m-%d'),
-#                freq = '2H')[:-1]
-#            
-#            df[ind1].plot(kind = 'scatter', x = 'time', y = 'data', c = 'b')
-#            df[ind2].plot(kind = 'scatter', x = 'time', y = 'data', c = 'r')
-            plt.scatter(ind1, tsdata[ind1], c = 'k', label = 'Normal')
-            plt.scatter(ind2, tsdata[ind2], c = 'r', label = 'Anomaly')
-            plt.xticks(self.num * np.arange(len(self.lindex)), self.df.index)
+            plt.scatter(self.sindex[ind1], tsdata[ind1], c = 'k', label = 'Normal')
+            plt.scatter(self.sindex[ind2], tsdata[ind2], c = 'r', label = 'Anomaly')
             plt.title('Data model ' + title)
             plt.legend().draggable()                    
             plt.grid()
