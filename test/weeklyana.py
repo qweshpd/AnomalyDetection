@@ -37,12 +37,10 @@ class WeeklyAnalysis(object):
         
         self.data = data
         self.sdate = index[0]
-        self.edata = index[1]
-        self.lindex = pd.date_range(index[0].strftime('%Y-%m-%d'), 
-                                    index[1].strftime('%Y-%m-%d'))
-        self.sindex = pd.date_range(index[0].strftime('%Y-%m-%d'), 
-                                    index[1].strftime('%Y-%m-%d'),
-                                    freq = freq)
+        self.edate = index[1]
+        self.lindex = pd.date_range(index[0], index[1])
+        self.sindex = pd.date_range(index[0], index[1] + datetime.timedelta(1), 
+                                    freq = str(freq) +'H')
         self.freq = freq
         self.holiday = holiday
         self.num = int(24 / freq)
@@ -52,11 +50,7 @@ class WeeklyAnalysis(object):
     def _get_df(self):
         '''
         Transform pandas.Series data into pandas.DataFrame format.
-    
-        Parameters
-        ----------       
-    
-        
+
         Returns
         ----------
         df : pandas.DataFrame
@@ -86,7 +80,7 @@ class WeeklyAnalysis(object):
         '''
         
         start = np.mod(date - self.sdate.weekday(), 7)
-        ind = np.arange(start, (self.index[1] - self.index[0]).days + 1, 7)
+        ind = np.arange(start, (self.edate - self.sdate).days + 1, 7)
         dailydata = np.array(self.df)[ind]
         tmpind = list(np.array(self.df.index)[ind])
         tmpinddel = [tmpind.index(i) for i in tmpind if i in self.holiday]
@@ -123,8 +117,8 @@ class WeeklyAnalysis(object):
             setattr(self, _weekday[i], self._get_daily(i))
             
         # Offday = Saturday, Sunday and Holidays
-        start = np.mod(5 - self.index[0].weekday(), 7) # Saturday start
-        ind = np.arange(start, (self.index[1] - self.index[0]).days + 1, 7)
+        start = np.mod(5 - self.sdate.weekday(), 7) # Saturday start
+        ind = np.arange(start, (self.edate - self.sdate).days + 1, 7)
         tmp = np.append(ind, ind + 1)
         for day in self.holiday:
             tmp = np.append(tmp, np.where(np.array(self.df.index) == day)[0])
@@ -201,7 +195,8 @@ class WeeklyAnalysis(object):
                              daymodel.loc['Ave'] + 3 * daymodel.loc['Std'], 
                              daymodel.loc['Ave'] - 3 * daymodel.loc['Std'], 
                              color = '#87CEEB', label = 'Confidence Inerval')
-            plt.legend().draggable()                    
+            plt.legend().draggable()
+            plt.title('Average weekly data model with confidence interval.')                 
             plt.grid()
             plt.show()
 
@@ -232,37 +227,36 @@ class WeeklyAnalysis(object):
             tsdata = np.array(self.data)
         else:
             tsdata = np.array(data)
-            
-        tmp = pd.date_range(self.index[0].strftime('%Y-%m-%d'), 
-                (self.index[1] + datetime.timedelta(1)).strftime('%Y-%m-%d'))[:-1]
-        s = self.index[0].weekday()
-        e = self.index[1].weekday()
-        startday = self.index[0] - datetime.timedelta(s)
-        endday = self.index[1] + datetime.timedelta(7 - e)
+
+        s = self.sdate.weekday()
+        e = self.edate.weekday()
+        startday = self.sdate - datetime.timedelta(s)
+        endday = self.edate + datetime.timedelta(7 - e)
         itera = int((endday - startday).days / 7)
         model = np.array(self.dailymodel())
         
         for i in np.arange(itera - 1):
             model = np.hstack((model, np.array(self.dailymodel())))
             
-        self.model = model[:, self.num * s:-((6 - e)*self.num)]
+        model = model[:, self.num * s:-((6 - e)*self.num)]
+        
+        title = 'without holidays.'
         
         if hol:
-            for i in np.arange(len(tmp)):
-                if tmp[i].strftime('%Y-%m-%d') in self.holiday:
-                    print(tmp[i].strftime('%Y-%m-%d'))
-                    print(self.model[:, i:i + self.num].shape)
-                    print(np.array(self.daymodel['Offday']).shape)
-                    print(i)
-                    self.model[:, i:i + self.num] = np.array(self.daymodel['Offday'])
+            title = 'with holidays.'
+            for i in np.arange(len(self.lindex)):
+                if self.lindex[i].strftime('%Y-%m-%d') in self.holiday:
+                    model[:, 12 * i: 12 * i + self.num] = np.array(self.daymodel['Offday'])
+        
+        self.model = model
 
         if show:
             below = self.model[0, :] - 3 * self.model[3, :]
             above = self.model[0, :] + 3 * self.model[3, :]
             plt.figure()
-            plt.plot(np.arange(self.num * len(tmp)), self.model[0, :], 
+            plt.plot(np.arange(self.num * len(self.lindex)), self.model[0, :], 
                      '-', color = '#0072B2', label = 'Average')
-            plt.fill_between(np.arange(self.num * len(tmp)), above, below, 
+            plt.fill_between(np.arange(self.num * len(self.lindex)), above, below, 
                             color = '#87CEEB', label = 'Confidence Inerval')
             
             ind1 = np.where((tsdata >= below) & (tsdata <= above))
@@ -278,9 +272,8 @@ class WeeklyAnalysis(object):
 #            df[ind2].plot(kind = 'scatter', x = 'time', y = 'data', c = 'r')
             plt.scatter(ind1, tsdata[ind1], c = 'k', label = 'Normal')
             plt.scatter(ind2, tsdata[ind2], c = 'r', label = 'Anomaly')
-            
-            plt.xticks(self.num * np.arange(len(tmp)),
-                       [i.strftime('%Y-%m-%d') for i in tmp])
+            plt.xticks(self.num * np.arange(len(self.lindex)), self.df.index)
+            plt.title('Data model ' + title)
             plt.legend().draggable()                    
             plt.grid()
             plt.show()   
