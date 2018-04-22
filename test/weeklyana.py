@@ -9,8 +9,11 @@ import matplotlib.pylab as plt
 from matplotlib.pylab import rcParams
 rcParams['figure.figsize'] = 15, 6
 
-_weekday = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", 
-             "Saturday","Sunday"]
+_weekday = ["Monday", "Tuesday", "Wednesday", "Thursday", 
+            "Friday", "Saturday","Sunday"]
+
+_keys = ["Monday", "Tuesday", "Wednesday", "Thursday",
+         "Friday", "Saturday","Sunday", 'Offday']
 
 class WeeklyAnalysis(object):
     '''
@@ -18,17 +21,15 @@ class WeeklyAnalysis(object):
 
     '''
     
-    def __init__(self, data, index, freq = 2, holiday = None):
+    def __init__(self, data, freq = 2, holiday = None):
         '''
         Initialize.
         
         Parameters
         ----------       
-        data : 1D array like 
+        data : pandas.Series data with datetime-like index
             Data to be analyzed
-        index : 1D array like DatetimeIndex
-            Start and end date of data.
-        freq : integer
+        freq : integer, default 2
             Frequency of data collected. Currently support only int times of 
             hourly data.
         holiday : list of string
@@ -36,16 +37,17 @@ class WeeklyAnalysis(object):
         '''
         
         self.data = data
-        self.sdate = index[0]
-        self.edate = index[1]
-        self.lindex = pd.date_range(index[0], index[1])
-        self.sindex = pd.date_range(index[0], index[1] + datetime.timedelta(1),
+        self.sdate = data.index[0].date()
+        self.edate = data.index[1].date()
+        self.lindex = pd.date_range(self.sdate, self.edate)
+        self.sindex = pd.date_range(self.sdate, self.edate + datetime.timedelta(1),
                                     freq = str(freq) +'H')[:-1]
-        self.freq = freq
+        self.num = int(len(self.sindex) / len(self.lindex))
+        self.freq = int(24 / self.num)
+        self.dailydata = {}
+        self.weekmodel = {}
         self.holiday = holiday
-        self.num = int(24 / freq)
         self.columns = [('0' + str(i) + ':00')[-5:] for i in np.arange(self.num)*freq]
-        self._get_df()
         
     def _get_df(self):
         '''
@@ -59,73 +61,67 @@ class WeeklyAnalysis(object):
         tmp = np.array(self.data).reshape(len(self.lindex), self.num)
         self.df = pd.DataFrame(tmp, columns = self.columns, 
                    index = [date.strftime('%Y-%m-%d') for date in self.lindex])
-        
-        return self.df
     
-    def _get_daily(self, date, show = False):
+    def _get_dailydata(self, date):
         '''
         Get historical data on a specific weekday or weekend.    
         
         Parameters
         ----------       
-        date : integer from 0 to 6
-            Specific date.
-        show : boolean
-            If True, plot daily data in matplotlib figure.
-        
-        Returns
-        ----------
-        daydf : numpy.array
-            Formatted daily data.
+        date : integer 
+            Specific date, from 0 to 6 for weekday, or 7 for offday.
         '''
         
-        start = np.mod(date - self.sdate.weekday(), 7)
-        ind = np.arange(start, (self.edate - self.sdate).days + 1, 7)
-        dailydata = np.array(self.df)[ind]
-        tmpind = list(np.array(self.df.index)[ind])
-        tmpinddel = [tmpind.index(i) for i in tmpind if i in self.holiday]
-        dailydata = np.delete(dailydata, tmpinddel, 0)
-        inde = np.delete(np.array(self.df.index)[ind], tmpinddel, 0)
-        ind = np.delete(ind, tmpinddel, 0)
-
-        if show:
-            plt.figure()
-            for i in np.arange(dailydata.shape[0]):
-                plt.plot(np.linspace(1, self.num, self.num), 
-                         dailydata[i, :], label = inde[i])
-            plt.legend().draggable()
-            plt.ylim(0, int(str(int(str(int(max(self.data)))[:2]) + 2) \
-                            + str(int(max(self.data)))[2:]))
-            pd.DataFrame(dailydata).boxplot()
-            plt.title('Daily traffic on %s' % _weekday[date])
-            plt.show()
+        if date == 7:
+            # Offday = Saturday, Sunday and Holidays
+            start = np.mod(5 - self.sdate.weekday(), 7) # Saturday start
+            ind = np.arange(start, (self.edate - self.sdate).days + 1, 7)
+            tmp = np.append(ind, ind + 1)
+            for day in self.holiday:
+                tmp = np.append(tmp, np.where(np.array(self.df.index) == day)[0])
+            tmp.sort()
+            self.dailydata['Offday'] = self.df.loc[self.df.index[tmp]]
+        else:
+            start = np.mod(date - self.sdate.weekday(), 7)
+            ind = np.arange(start, (self.edate - self.sdate).days + 1, 7)
+            dailydata = np.array(self.df)[ind]
+            tmpind = list(np.array(self.df.index)[ind])
+            tmpinddel = [tmpind.index(i) for i in tmpind if i in self.holiday]
+            dailydata = np.delete(dailydata, tmpinddel, 0)
+            ind = np.delete(ind, tmpinddel, 0)
+            self.dailydata[_weekday[date]] = pd.DataFrame(dailydata, 
+                                              index = self.df.index[ind],
+                                              columns = self.columns)
         
-        return pd.DataFrame(dailydata, index = self.df.index[ind],
-                            columns = self.columns)
-    
-    def weekfit(self):
+    def plot_daily(self, *args):
         '''
-        Transfer data into each weekday and holiday.   
+        Plot historical daily data in matplotlib figure.    
         
         Parameters
-        ----------
-        show : boolean
-            If True, plot daily data in matplotlib figure.
-        
+        ----------       
+        date : integer from 0 to 6
+            Specific date.
         '''
-        for i in np.arange(7):
-            setattr(self, _weekday[i], self._get_daily(i))
+        
+        if (args in _weekday) or (args == 'Offday'):
+            dailydata = self.dailydata[args]
+        else:
+            for day in _keys:
+                self.plot_daily(day)
             
-        # Offday = Saturday, Sunday and Holidays
-        start = np.mod(5 - self.sdate.weekday(), 7) # Saturday start
-        ind = np.arange(start, (self.edate - self.sdate).days + 1, 7)
-        tmp = np.append(ind, ind + 1)
-        for day in self.holiday:
-            tmp = np.append(tmp, np.where(np.array(self.df.index) == day)[0])
-        tmp.sort()
-        self.Offday = self.df.loc[self.df.index[tmp]]
+        plt.figure()
+        for i in np.arange(dailydata.shape[0]):
+            plt.plot(np.arange(self.num) + 1, np.array(dailydata)[i, :], 
+                     label = dailydata.index[i])
+        plt.legend().draggable()
+        plt.ylim(0, int(str(int(str(int(max(self.data)))[:2]) + 2) \
+                        + str(int(max(self.data)))[2:]))
+        pd.DataFrame(np.array(dailydata)).boxplot()
+        plt.xticks(np.arange(self.num) + 1, self.columns)
+        plt.title('Daily traffic on %s' % day)
+        plt.show()
     
-    def _somedaymodel(self, day):
+    def _get_dailymodel(self, *args):
         '''
         Build daily model.   
         
@@ -140,68 +136,82 @@ class WeeklyAnalysis(object):
         daymodel : pandas.DataFrame
             Model of a specfic day.
         '''
-        tmp = getattr(self, day)
-        daymodel = pd.DataFrame(index = ['Ave', 'Max', 'Min', 'Std'])
-        for time in self.columns:
-            tmpdata = np.array(tmp[time])
-            mmax, mmin = np.percentile(tmp[time], [75, 25])
-            temp = tmpdata[np.where((tmpdata <= mmax  + 1.5 * (mmax - mmin)) & 
-                             (tmpdata >= mmin - 1.5 * (mmax - mmin)))]
-            daymodel[time] = [temp.mean(), temp.max(), 
-                              temp.min(),  temp.std()]
-        self.daymodel[day] = daymodel
-        return daymodel
+        index = ['Ave', 'Max', 'Min', 'Std']
         
-        
-    def dailymodel(self, show = False):
+        if not args:
+            daymodel = np.array([[],[],[],[]])
+            col = []
+            for date in _keys:
+                daymodel = np.hstack([daymodel, 
+                              np.array(self._get_dailymodel(day = date))])
+                col.append([date[:3] + i for i in self.columns])
+            self.weekmodel['week'] = pd.DataFrame(daymodel,
+                          columns = np.hstack(col), index = index)
+        else:
+            tmp = self.dailydata[args]
+            daymodel = pd.DataFrame(index = index)
+            for time in self.columns:
+                tmpdata = np.array(tmp[time])
+                mmax, mmin = np.percentile(tmp[time], [75, 25])
+                temp = tmpdata[np.where((tmpdata <= mmax  + 1.5 * (mmax - mmin)) & 
+                                 (tmpdata >= mmin - 1.5 * (mmax - mmin)))]
+                daymodel[time] = [temp.mean(), temp.max(), 
+                                  temp.min(),  temp.std()]
+            self.weekmodel[args] = daymodel
+
+    def plot_weekmodel(self, *args):
         '''
-        Build basic model based on historical data.   
+        Plot regular wekkly model in matplotlib figure.
         
         Parameters
         ----------
         day : string, default = None
             Return the specific model of that day, or entire week model if 
             keep default.
-        show : boolean
+        '''
+        if args in _keys:
+            daymodel = self.dailydata[args]
+            title = args
+        else:
+            daymodel = self.dailydata['week']
+            title = 'Weekly'
+            
+        plt.figure()
+        plt.plot(np.arange(daymodel.shape[1]), daymodel.loc['Ave'], 
+                 '-', color = '#0072B2', label = 'Average')
+        plt.fill_between(np.arange(daymodel.shape[1]), 
+                         daymodel.loc['Ave'] + 3 * daymodel.loc['Std'], 
+                         daymodel.loc['Ave'] - 3 * daymodel.loc['Std'], 
+                         color = '#87CEEB', label = 'Confidence Inerval')
+        plt.legend().draggable()
+        plt.title(title + ' data model with confidence interval.')                 
+        plt.grid()
+        plt.show()
+
+        
+    def fit(self):
+        '''
+        Train model with data.   
+        
+        Parameters
+        ----------
+        data :  pandas.Series data
+            Data to test.
+        hol: boolean, default = False
+            If True, take holiday effect into consideration.
+        show : boolean, default = True
             If True, plot daily data in matplotlib figure.
             
         Returns
         ----------
-        daymodel : pandas.DataFrame
-            
+        anomalies : numpy.array of strings
+            Anomalies date and time.
         '''
-        # fit before modeling
-        if not hasattr(self, 'Offday'):
-            self.weekfit()
-        
-        self.daymodel = {}
-
-        daymodel = np.array([[],[],[],[]])
-        col = []
-        for date in _weekday:
-            daymodel = np.hstack([daymodel, 
-                                 np.array(self._somedaymodel(date))])
-            col.append([date[:3] + i for i in self.columns])
-        daymodel = pd.DataFrame(daymodel, columns = np.hstack(col),
-                                index = ['Ave', 'Max', 'Min', 'Std'])
-        _ = self._somedaymodel('Offday')
-        self.weekmodel = daymodel
-
-        if show:
-            plt.figure()
-            plt.plot(np.arange(daymodel.shape[1]), daymodel.loc['Ave'], 
-                     '-', color = '#0072B2', label = 'Average')
-            plt.fill_between(np.arange(daymodel.shape[1]), 
-                             daymodel.loc['Ave'] + 3 * daymodel.loc['Std'], 
-                             daymodel.loc['Ave'] - 3 * daymodel.loc['Std'], 
-                             color = '#87CEEB', label = 'Confidence Inerval')
-            plt.legend().draggable()
-            plt.title('Average weekly data model with confidence interval.')                 
-            plt.grid()
-            plt.show()
-
-        return daymodel
-        
+        self._get_df()
+        for i in np.arange(8):
+            self._get_dailydata(i)
+        self._get_dailymodel()
+            
     def fitmodel(self, data = None, hol = False, show = True):
         '''
         Fit trained model to data, and get anomaly data point.   
@@ -220,8 +230,9 @@ class WeeklyAnalysis(object):
         anomalies : numpy.array of strings
             Anomalies date and time.
         '''
-        if not hasattr(self, 'daymodel'):
-            self.dailymodel()
+        self._get_df()
+        for i in np.arange(8):
+            self._get_dailydata(i)
             
         if data is None:
             tsdata = np.array(self.data)
@@ -233,10 +244,10 @@ class WeeklyAnalysis(object):
         startday = self.sdate - datetime.timedelta(s)
         endday = self.edate + datetime.timedelta(7 - e)
         itera = int((endday - startday).days / 7)
-        model = np.array(self.dailymodel())
+        model = np.array(self.weekmodel)
         
         for i in np.arange(itera - 1):
-            model = np.hstack((model, np.array(self.dailymodel())))
+            model = np.hstack([model, np.array(self.weekmodel)])
             
         model = model[:, self.num * s:-((6 - e)*self.num)]
         
@@ -267,8 +278,8 @@ class WeeklyAnalysis(object):
             plt.title('Data model ' + title)
             plt.legend().draggable()                    
             plt.grid()
-            plt.show()   
-            
+            plt.show()
+
         
         
         
