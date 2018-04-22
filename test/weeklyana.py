@@ -251,10 +251,8 @@ class WeeklyAnalysis(object):
             else:
                 hol = holiday
                 
-            for i in np.arange(model.shape[1]):
+            for i in np.arange(len(tmpind)):
                 if tmpind[i].strftime('%Y-%m-%d') in hol:
-                    print(model[:, self.num * i: self.num * i + self.num].shape)
-                    print(np.array(self._get_dailymodel('Offday').shape))
                     model[:, self.num * i: self.num * i + self.num] =\
                                                 np.array(self.weekmodel['Offday'])
         return pd.DataFrame(model, columns = index,
