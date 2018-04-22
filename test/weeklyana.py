@@ -114,8 +114,7 @@ class WeeklyAnalysis(object):
             plt.plot(np.arange(self.num) + 1, np.array(dailydata)[i, :], 
                      label = dailydata.index[i])
         plt.legend().draggable()
-        plt.ylim(0, int(str(int(str(int(max(self.data)))[:2]) + 2) \
-                        + str(int(max(self.data)))[2:]))
+        plt.ylim(0, np.ceil(1.04 * max(self.data)))
         pd.DataFrame(np.array(dailydata)).boxplot()
         plt.xticks(np.arange(self.num) + 1, self.columns)
         plt.title('Daily traffic on %s' % args[0])
@@ -205,8 +204,55 @@ class WeeklyAnalysis(object):
             self._get_dailydata(i)
             
         self._get_dailymodel()
+    
+    def _generate_model(self, sdate, edate, holiday = True):
+        '''
+        Generate data model within date range with freqency.   
+        
+        Parameters
+        ----------
+        sdate : string or datetime-like
+            Left bound for generating dates
+        edate : string or datetime-like
+            Right bound for generating dates
+        holiday ： boolean, or list of holidays' date, default True
             
-    def fitmodel(self, data = None, hol = False, show = True):
+        Returns
+        ----------
+        model : pandas.DataFrame
+            Data model in the date range.
+        '''
+        s = sdate.weekday()
+        e = edate.weekday()
+        startday = sdate - datetime.timedelta(s)
+        endday = edate + datetime.timedelta(7 - e)
+        itera = int((endday - startday).days / 7)
+        model = np.array(self.weekmodel['week'])
+        index = pd.date_range(sdate, edate + datetime.timedelta(1), 
+                              freq = str(self.freq) +'H')[:-1]
+        
+        for i in np.arange(itera - 1):
+            model = np.hstack([model, np.array(self.weekmodel['week'])])
+            
+        model = model[:, self.num * s:-((6 - e)*self.num)]
+        
+        if holiday is False:
+            return model
+        elif holiday is True:
+            hol = self.holiday
+        else:
+            hol = holiday
+            
+        for i in np.arange(len(index)):
+            if index[i].strftime('%Y-%m-%d') in hol:
+                model[:, self.num * i: self.num * i + self.num] =\
+                                            np.array(self.daymodel['Offday'])
+                                            
+        return pd.DataFrame(model, columns = index,
+                     index = ['Ave', 'Max', 'Min', 'Std'])
+
+        
+    def detect(self, data = None, holiday = False, show = True):
         '''
         Fit trained model to data, and get anomaly data point.   
         
@@ -224,40 +270,16 @@ class WeeklyAnalysis(object):
         anomalies : numpy.array of strings
             Anomalies date and time.
         '''
-        self._get_df()
-        for i in np.arange(8):
-            self._get_dailydata(i)
-            
         if data is None:
-            tsdata = np.array(self.data)
-        else:
-            tsdata = np.array(data)
-
-        s = self.sdate.weekday()
-        e = self.edate.weekday()
-        startday = self.sdate - datetime.timedelta(s)
-        endday = self.edate + datetime.timedelta(7 - e)
-        itera = int((endday - startday).days / 7)
-        model = np.array(self.weekmodel)
+            data = self.data
         
-        for i in np.arange(itera - 1):
-            model = np.hstack([model, np.array(self.weekmodel)])
-            
-        model = model[:, self.num * s:-((6 - e)*self.num)]
-        
-        title = 'without holidays.'
-        
-        if hol:
-            title = 'with holidays.'
-            for i in np.arange(len(self.lindex)):
-                if self.lindex[i].strftime('%Y-%m-%d') in self.holiday:
-                    model[:, 12 * i: 12 * i + self.num] = np.array(self.daymodel['Offday'])
+        model = self._generate_model(sdate, edate, holiday = True)
         
         if show:
-            below = self.model[0, :] - 3 * self.model[3, :]
-            above = self.model[0, :] + 3 * self.model[3, :]
+            below = model[0, :] - 3 * model[3, :]
+            above = model[0, :] + 3 * model[3, :]
             plt.figure()
-            plt.plot(self.sindex, self.model[0, :], '-',
+            plt.plot(self.sindex, model[0, :], '-',
                       color = '#0072B2', label = 'Average')
             plt.fill_between(self.sindex, above, below, 
                             color = '#87CEEB', label = 'Confidence Inerval')
