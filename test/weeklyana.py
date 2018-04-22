@@ -38,7 +38,7 @@ class WeeklyAnalysis(object):
         
         self.data = data
         self.sdate = data.index[0].date()
-        self.edate = data.index[1].date()
+        self.edate = data.index[-1].date()
         self.lindex = pd.date_range(self.sdate, self.edate)
         self.sindex = pd.date_range(self.sdate, self.edate + datetime.timedelta(1),
                                     freq = str(freq) +'H')[:-1]
@@ -71,7 +71,6 @@ class WeeklyAnalysis(object):
         date : integer 
             Specific date, from 0 to 6 for weekday, or 7 for offday.
         '''
-        
         if date == 7:
             # Offday = Saturday, Sunday and Holidays
             start = np.mod(5 - self.sdate.weekday(), 7) # Saturday start
@@ -103,11 +102,12 @@ class WeeklyAnalysis(object):
             Specific date.
         '''
         
-        if (args in _weekday) or (args == 'Offday'):
-            dailydata = self.dailydata[args]
+        if args:
+            dailydata = self.dailydata[args[0]]
         else:
             for day in _keys:
                 self.plot_daily(day)
+            return None
             
         plt.figure()
         for i in np.arange(dailydata.shape[0]):
@@ -118,7 +118,7 @@ class WeeklyAnalysis(object):
                         + str(int(max(self.data)))[2:]))
         pd.DataFrame(np.array(dailydata)).boxplot()
         plt.xticks(np.arange(self.num) + 1, self.columns)
-        plt.title('Daily traffic on %s' % day)
+        plt.title('Daily traffic on %s' % args[0])
         plt.show()
     
     def _get_dailymodel(self, *args):
@@ -143,12 +143,12 @@ class WeeklyAnalysis(object):
             col = []
             for date in _keys:
                 daymodel = np.hstack([daymodel, 
-                              np.array(self._get_dailymodel(day = date))])
+                              np.array(self._get_dailymodel(date))])
                 col.append([date[:3] + i for i in self.columns])
             self.weekmodel['week'] = pd.DataFrame(daymodel,
                           columns = np.hstack(col), index = index)
         else:
-            tmp = self.dailydata[args]
+            tmp = self.dailydata[args[0]]
             daymodel = pd.DataFrame(index = index)
             for time in self.columns:
                 tmpdata = np.array(tmp[time])
@@ -157,7 +157,8 @@ class WeeklyAnalysis(object):
                                  (tmpdata >= mmin - 1.5 * (mmax - mmin)))]
                 daymodel[time] = [temp.mean(), temp.max(), 
                                   temp.min(),  temp.std()]
-            self.weekmodel[args] = daymodel
+            self.weekmodel[args[0]] = daymodel
+            return daymodel
 
     def plot_weekmodel(self, *args):
         '''
@@ -170,10 +171,10 @@ class WeeklyAnalysis(object):
             keep default.
         '''
         if args in _keys:
-            daymodel = self.dailydata[args]
+            daymodel = self.weekmodel[args]
             title = args
         else:
-            daymodel = self.dailydata['week']
+            daymodel = self.weekmodel['week']
             title = 'Weekly'
             
         plt.figure()
@@ -195,21 +196,14 @@ class WeeklyAnalysis(object):
         
         Parameters
         ----------
-        data :  pandas.Series data
-            Data to test.
         hol: boolean, default = False
             If True, take holiday effect into consideration.
-        show : boolean, default = True
-            If True, plot daily data in matplotlib figure.
-            
-        Returns
-        ----------
-        anomalies : numpy.array of strings
-            Anomalies date and time.
         '''
         self._get_df()
+        
         for i in np.arange(8):
             self._get_dailydata(i)
+            
         self._get_dailymodel()
             
     def fitmodel(self, data = None, hol = False, show = True):
@@ -259,8 +253,6 @@ class WeeklyAnalysis(object):
                 if self.lindex[i].strftime('%Y-%m-%d') in self.holiday:
                     model[:, 12 * i: 12 * i + self.num] = np.array(self.daymodel['Offday'])
         
-        self.model = model
-
         if show:
             below = self.model[0, :] - 3 * self.model[3, :]
             above = self.model[0, :] + 3 * self.model[3, :]
