@@ -14,14 +14,16 @@ _weekday = ["Monday", "Tuesday", "Wednesday", "Thursday",
 
 _keys = ["Monday", "Tuesday", "Wednesday", "Thursday",
          "Friday", "Saturday","Sunday", "Offday"]
-
+_ntimes = 3
 class WeeklyAnalysis(object):
     '''
-    Analyze 1-D timeseries data based on weekliy information.
+    Analyze 1-D timeseries data based on weekliy information. Fit for those data
+    with human behaviuors, i.e. weekly, and no trend. Currently support only 
+    int times of hourly data.
 
     '''
     
-    def __init__(self, data, freq = 2, holiday = None):
+    def __init__(self, data,  holiday = None):
         '''
         Initialize.
         
@@ -29,9 +31,6 @@ class WeeklyAnalysis(object):
         ----------       
         data : pandas.Series data with datetime-like index
             Data to be analyzed
-        freq : integer, default 2
-            Frequency of data collected. Currently support only int times of 
-            hourly data.
         holiday : list of string
             Predefined holidays.
         '''
@@ -39,15 +38,16 @@ class WeeklyAnalysis(object):
         self.data = data
         self.sdate = data.index[0].date()
         self.edate = data.index[-1].date()
+        self.num = int(len(data) / ((self.edate - self.sdate).days + 1))
+        self.freq = int(24 / self.num)
         self.lindex = pd.date_range(self.sdate, self.edate)
         self.sindex = pd.date_range(self.sdate, self.edate + datetime.timedelta(1),
-                                    freq = str(freq) +'H')[:-1]
-        self.num = int(len(self.sindex) / len(self.lindex))
-        self.freq = int(24 / self.num)
+                                    freq = str(self.freq) +'H')[:-1]
         self.dailydata = {}
         self.weekmodel = {}
         self.holiday = holiday
-        self.columns = [('0' + str(i) + ':00')[-5:] for i in np.arange(self.num)*freq]
+        self.columns = [('0' + str(i) + ':00')[-5:] for i\
+                        in np.arange(self.num)*self.freq]
         
     def _get_df(self):
         '''
@@ -182,8 +182,8 @@ class WeeklyAnalysis(object):
             for day in _weekday:
                 for time in self.columns:
                     xtick.append(day[:0] + time[:2])
-        above = daymodel.loc['Ave'] + 3 * daymodel.loc['Std']
-        below = daymodel.loc['Ave'] - 3 * daymodel.loc['Std']
+        above = daymodel.loc['Ave'] + _ntimes * daymodel.loc['Std']
+        below = daymodel.loc['Ave'] - _ntimes * daymodel.loc['Std']
         below[np.where(below < 0)[0]] = 0
             
         plt.figure()
@@ -193,7 +193,7 @@ class WeeklyAnalysis(object):
                          color = '#87CEEB', label = 'Confidence Inerval')
         plt.legend().draggable()
         plt.xticks(np.arange(daymodel.shape[1]), xtick)
-        plt.title(title + ' data model with confidence interval.')                 
+        plt.title(title + ' data model with confidence interval.')
         plt.grid()
         plt.show()
 
@@ -287,13 +287,16 @@ class WeeklyAnalysis(object):
         edate = data.index[-1].date()
         model = self._generate_model(sdate, edate, holiday = holiday)
         
-        below = model.loc['Ave'] - 3 * model.loc['Std']
-        above = model.loc['Ave'] + 3 * model.loc['Std']
+        below = model.loc['Ave'] - _ntimes * model.loc['Std']
+        above = model.loc['Ave'] + _ntimes * model.loc['Std']
         below[np.where(below < 0)[0]] = 0
         
         tsdata = np.array(data)
         ind = np.where((tsdata < below)|(tsdata > above))
         
+        for i in self.data.index[ind]:
+            print(i)
+            
         if show:
             ind1 = np.where((tsdata >= below) & (tsdata <= above))
             if holiday is False:
