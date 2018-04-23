@@ -15,6 +15,7 @@ _weekday = ["Monday", "Tuesday", "Wednesday", "Thursday",
 _keys = ["Monday", "Tuesday", "Wednesday", "Thursday",
          "Friday", "Saturday","Sunday", "Offday"]
 _ntimes = 3
+
 class WeeklyAnalysis(object):
     '''
     Analyze 1-D timeseries data based on weekliy information. Fit for those data
@@ -108,17 +109,22 @@ class WeeklyAnalysis(object):
             for day in _keys:
                 self.plot_daily(day)
             return None
-            
-        plt.figure()
+        
+        def _onpick(event):
+                print(event.artist)
+                
+        fig, ax = plt.subplots()
         for i in np.arange(dailydata.shape[0]):
-            plt.plot(np.arange(self.num) + 1, np.array(dailydata)[i, :], 
-                     label = dailydata.index[i])
-        plt.legend().draggable()
-        plt.ylim(0, np.ceil(1.04 * max(self.data)))
+            ax.plot(np.arange(self.num) + 1, np.array(dailydata)[i, :], 
+                     label = dailydata.index[i], picker = True)
+        fig.canvas.mpl_connect('pick_event', _onpick)    
+        ax.legend().draggable()
+        ax.set_ylim(0, np.ceil(1.04 * max(self.data)))
         pd.DataFrame(np.array(dailydata)).boxplot()
-        plt.xticks(np.arange(self.num) + 1, self.columns)
-        plt.title('Daily traffic on %s' % args[0])
-        plt.show()
+        ax.set_xticks(np.arange(self.num) + 1, self.columns)
+            
+        ax.set_title('Daily traffic on %s' % args[0])
+        fig.show()
     
     def _get_dailymodel(self, *args):
         '''
@@ -181,7 +187,8 @@ class WeeklyAnalysis(object):
             xtick = []
             for day in _weekday:
                 for time in self.columns:
-                    xtick.append(day[:0] + time[:2])
+                    xtick.append(day[:3] + time)
+                    
         above = daymodel.loc['Ave'] + _ntimes * daymodel.loc['Std']
         below = daymodel.loc['Ave'] - _ntimes * daymodel.loc['Std']
         below[np.where(below < 0)[0]] = 0
@@ -192,7 +199,7 @@ class WeeklyAnalysis(object):
         plt.fill_between(np.arange(daymodel.shape[1]), above, below, 
                          color = '#87CEEB', label = 'Confidence Inerval')
         plt.legend().draggable()
-        plt.xticks(np.arange(daymodel.shape[1]), xtick)
+        plt.xticks(np.arange(daymodel.shape[1]), xtick, rotation = 40)
         plt.title(title + ' data model with confidence interval.')
         plt.grid()
         plt.show()
@@ -298,23 +305,32 @@ class WeeklyAnalysis(object):
             print(i)
             
         if show:
+            def _onpick(event):
+                ind = event.ind
+                print('Time: %s, Rate: %.3f' %
+                      (model.columns[ind].strftime('%Y-%m-%d %H:%m-%s'),
+                      np.take(tsdata, ind)))
+                
             ind1 = np.where((tsdata >= below) & (tsdata <= above))
             if holiday is False:
                 title = 'Data model without holidays.'
             else:
                 title = 'Data model with customized holidays.'
                 
-            plt.figure()
-            plt.plot(model.columns, model.loc['Ave'], '-',
+            fig, ax = plt.subplots()
+            ax.plot(model.columns, model.loc['Ave'], '-',
                       color = '#0072B2', label = 'Average')
-            plt.fill_between(model.columns, above, below, 
+            ax.fill_between(model.columns, above, below, 
                             color = '#87CEEB', label = 'Confidence Inerval')
             
-            plt.scatter(model.columns[ind1], tsdata[ind1], c = 'k', label = 'Normal')
-            plt.scatter(model.columns[ind],  tsdata[ind],  c = 'r', label = 'Anomaly')
-            plt.title(title)
-            plt.legend().draggable()                    
-            plt.grid()
+            ax.scatter(model.columns[ind1], tsdata[ind1], c = 'k', 
+                        label = 'Normal', picker = True)
+            ax.scatter(model.columns[ind],  tsdata[ind],  c = 'r', 
+                        label = 'Anomaly', picker = True)
+            ax.set_title(title)
+            ax.legend().draggable()       
+            fig.canvas.mpl_connect('pick_event', _onpick)             
+            ax.grid()
             plt.show()
 
         
