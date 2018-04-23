@@ -61,7 +61,7 @@ class WeeklyAnalysis(object):
         '''
         tmp = np.array(self.data).reshape(len(self.lindex), self.num)
         self.df = pd.DataFrame(tmp, columns = self.columns, 
-                   index = [date.strftime('%Y-%m-%d') for date in self.lindex])
+                   index = self.lindex.strftime('%Y-%m-%d'))
     
     def _get_dailydata(self, date):
         '''
@@ -121,8 +121,8 @@ class WeeklyAnalysis(object):
         ax.legend().draggable()
         ax.set_ylim(0, np.ceil(1.04 * max(self.data)))
         pd.DataFrame(np.array(dailydata)).boxplot()
-        ax.set_xticks(np.arange(self.num) + 1, self.columns)
-            
+#        ax.set_xticks(np.arange(self.num) + 1)
+        ax.set_xticklabels(self.columns)
         ax.set_title('Daily traffic on %s' % args[0])
         fig.show()
     
@@ -308,7 +308,7 @@ class WeeklyAnalysis(object):
             def _onpick(event):
                 ind = event.ind
                 print('Time: %s, Rate: %.3f' %
-                      (model.columns[ind].strftime('%Y-%m-%d %H:%m-%s'),
+                      (model.columns[ind].strftime('%Y-%m-%d %H:%m-%s')[0],
                       np.take(tsdata, ind)))
                 
             ind1 = np.where((tsdata >= below) & (tsdata <= above))
