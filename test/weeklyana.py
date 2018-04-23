@@ -13,7 +13,7 @@ _weekday = ["Monday", "Tuesday", "Wednesday", "Thursday",
             "Friday", "Saturday","Sunday"]
 
 _keys = ["Monday", "Tuesday", "Wednesday", "Thursday",
-         "Friday", "Saturday","Sunday", 'Offday']
+         "Friday", "Saturday","Sunday", "Offday"]
 
 class WeeklyAnalysis(object):
     '''
@@ -182,17 +182,17 @@ class WeeklyAnalysis(object):
             for day in _weekday:
                 for time in self.columns:
                     xtick.append(day[:0] + time[:2])
-                
+        above = daymodel.loc['Ave'] + 3 * daymodel.loc['Std']
+        below = daymodel.loc['Ave'] - 3 * daymodel.loc['Std']
+        below[np.where(below < 0)[0]] = 0
             
         plt.figure()
         plt.plot(np.arange(daymodel.shape[1]), daymodel.loc['Ave'], 
                  '-', color = '#0072B2', label = 'Average')
-        plt.fill_between(np.arange(daymodel.shape[1]), 
-                         daymodel.loc['Ave'] + 3 * daymodel.loc['Std'], 
-                         daymodel.loc['Ave'] - 3 * daymodel.loc['Std'], 
+        plt.fill_between(np.arange(daymodel.shape[1]), above, below, 
                          color = '#87CEEB', label = 'Confidence Inerval')
         plt.legend().draggable()
-        plt.xticks(np.arange(daymodel.shape[1]) + 1, xtick)
+        plt.xticks(np.arange(daymodel.shape[1]), xtick)
         plt.title(title + ' data model with confidence interval.')                 
         plt.grid()
         plt.show()
@@ -243,8 +243,12 @@ class WeeklyAnalysis(object):
         
         for i in np.arange(itera - 1):
             model = np.hstack([model, np.array(self.weekmodel['week'])])
-        model = model[:, self.num * s:-((6 - e)*self.num)]
-        
+            
+        if e == 6:
+            model = model[:, self.num * s:]
+        else:
+            model = model[:, self.num * s:-((6 - e)*self.num)]
+            
         if holiday is not False:
             if holiday is True:
                 hol = self.holiday
@@ -285,6 +289,7 @@ class WeeklyAnalysis(object):
         
         below = model.loc['Ave'] - 3 * model.loc['Std']
         above = model.loc['Ave'] + 3 * model.loc['Std']
+        below[np.where(below < 0)[0]] = 0
         
         tsdata = np.array(data)
         ind = np.where((tsdata < below)|(tsdata > above))
