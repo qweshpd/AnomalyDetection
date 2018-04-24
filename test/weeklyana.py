@@ -24,7 +24,7 @@ class WeeklyAnalysis(object):
 
     '''
     
-    def __init__(self, data,  holiday = None):
+    def __init__(self, data, holiday = None):
         '''
         Initialize.
         

@@ -7,9 +7,8 @@ import datetime
 import pandas as pd
 import pymongo
 from pymongo import MongoClient
-from libs.preproc import getdtime
 
-def getdata(devname, intf, sdate = None, edate = None):
+def getdata(devname, intf, sdate = None, edate = None, dbname, collection, feature):
     '''
     Load data from MongoDB.
     
@@ -35,8 +34,8 @@ def getdata(devname, intf, sdate = None, edate = None):
     if not edate:
         edate = datetime.date.today().strftime('%Y-%m-%d')
         
-    start_date = getdtime(sdate)
-    end_date = getdtime(edate)
+    start_date = datetime.datetime.strptime(sdate, '%Y-%m-%d')
+    end_date = datetime.datetime.strptime(edate, '%Y-%m-%d')
 
 
     interf = _recintf(intf)
@@ -44,7 +43,7 @@ def getdata(devname, intf, sdate = None, edate = None):
     
     cursor = MongoClient('mongodb://%s:%s@%s:27017' % 
                         ('username', 'password', 'host'))\
-                        ['MLDataQappNetbrain']['InterfaceDetail']\
+                        [dbname][collection ]\
                         .find({'device_name': devname, 
                         'date': {
                             '$gte': start_date,
@@ -55,13 +54,13 @@ def getdata(devname, intf, sdate = None, edate = None):
     for itemCursor in cursor:
         timeArr.append(itemCursor['date'] )
         # devName = itemCursor['device_name']
-        InterfaceDetailArr = itemCursor['InterfaceDetail']
+        InterfaceDetailArr = itemCursor[collection]
         for oneInf in InterfaceDetailArr:
             infName = oneInf['intf']
             if not infName == interf:
                 continue
             
-            input_rate = float(oneInf['input_rate_bit'])
+            input_rate = float(oneInf[feature])
             valueArr.append(input_rate)           
     timeseries = pd.Series(valueArr, index = timeArr)
     
