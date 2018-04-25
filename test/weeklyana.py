@@ -73,10 +73,6 @@ class WeeklyAnalysis(object):
             start = np.mod(date - self.sdate.weekday(), 7)
             ind = np.arange(start, (self.edate - self.sdate).days + 1, 7)
             dailydata = np.array(self.df)[ind]
-            tmpind = list(np.array(self.df.index)[ind])
-            tmpinddel = [tmpind.index(i) for i in self.holiday if i in tmpind]
-            dailydata = np.delete(dailydata, tmpinddel, 0)
-            ind = np.delete(ind, tmpinddel, 0)
             self.dailydata[_weekday[date]] = pd.DataFrame(dailydata, 
                                               index = self.df.index[ind],
                                               columns = self.columns)
@@ -280,7 +276,9 @@ class WeeklyAnalysis(object):
         
         for i in np.arange(8):
             self._get_dailydata(i)
-            
+        
+        self._add_to_holiday(holiday)
+        
         self._drop_before_model(daytodrop)
         
         self._get_dailymodel()
