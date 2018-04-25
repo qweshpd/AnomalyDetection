@@ -333,7 +333,7 @@ class WeeklyAnalysis(object):
         return pd.DataFrame(model, columns = index,
                      index = ['Ave', 'Max', 'Min', 'Std'])
         
-    def detect(self, data = None, holiday = False, show = True):
+    def detect(self, data = None, holiday = False, where = 'both', show = True):
         '''
         Fit trained model to data, and get anomaly data point.   
         
@@ -343,6 +343,7 @@ class WeeklyAnalysis(object):
             Data to test.
         hol: boolean, default = False
             If True, take holiday effect into consideration.
+        where : string, ['above', 'below', 'both']
         show : boolean, default = True
             If True, plot daily data in matplotlib figure.
             
@@ -362,16 +363,33 @@ class WeeklyAnalysis(object):
         below[np.where(below < 0)[0]] = 0
         
         tsdata = np.array(data)
-        ind = np.where((tsdata < below)|(tsdata > above))
+        indabove = np.where(tsdata > above)[0]
+        indbelow = np.where(tsdata < below)[0]
         
-        for i in self.data.index[ind]:
+        printext = []
+        
+        if where == 'both':
+            printext.append('Above Normal Range:\n')
+            for i in indabove:
+                printext.append(data.index[i].strftime('%Y-%m-%d %H:%m:%S'))
+            printext.append('\nBelow Normal Range:\n')
+            for i in indbelow:
+                printext.append(data.index[i].strftime('%Y-%m-%d %H:%m:%S'))
+        elif where == 'above':
+            for i in indabove:
+                printext.append(data.index[i].strftime('%Y-%m-%d %H:%m:%S'))
+        elif where == 'below':
+            for i in indbelow:
+                printext.append(data.index[i].strftime('%Y-%m-%d %H:%m:%S'))
+            
+        for i in printext:
             print(i)
             
         if show:
             def _onpick(event):
                 ind = event.ind
-                print('Time: %s, Rate: %.3f' %
-                      (model.columns[ind].strftime('%Y-%m-%d %H:%m-%s')[0],
+                print('\nTime: %s, Rate: %.3f' %
+                      (data.index[ind].strftime('%Y-%m-%d %H:%m:%S')[0],
                       tsdata[ind]))
                 
             ind1 = np.where((tsdata >= below) & (tsdata <= above))
@@ -388,14 +406,27 @@ class WeeklyAnalysis(object):
             
             ax.scatter(model.columns[ind1], tsdata[ind1], c = 'k', 
                         label = 'Normal', picker = True)
-            ax.scatter(model.columns[ind],  tsdata[ind],  c = 'r', 
-                        label = 'Anomaly', picker = True)
+            
+            if where == 'both':
+                ax.scatter(model.columns[indabove], tsdata[indabove],  c = 'r', 
+                            label = 'Above Normal', picker = True)
+                ax.scatter(model.columns[indbelow], tsdata[indbelow],  c = 'pink', 
+                            label = 'Below Normal', picker = True)
+            elif where == 'above':
+                ax.scatter(model.columns[indabove], tsdata[indabove],  c = 'r', 
+                            label = 'Anormal', picker = True)
+            elif where == 'below':
+                ax.scatter(model.columns[indbelow], tsdata[indbelow],  c = 'r', 
+                            label = 'Anormal', picker = True)
+            
             ax.set_title(title)
             ax.legend().draggable()       
             fig.canvas.mpl_connect('pick_event', _onpick)             
             ax.grid()
             plt.show()
-
+            
+#        return set(data.index[np.hstack([indabove, indbelow])].strftime('%Y-%m-%d'))
+    
     def update(self, newholiday = None, drop = None):
         '''
         Drop unusual days or add new holiday.
