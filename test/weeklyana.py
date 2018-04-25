@@ -21,21 +21,17 @@ class WeeklyAnalysis(object):
     Analyze 1-D timeseries data based on weekliy information. Fit for those data
     with human behaviuors, i.e. weekly, and no trend. Currently support only 
     int times of hourly data.
-
+    
+    Parameters
+    ----------       
+    data : pandas.Series data with datetime-like index
+        Data to be analyzed.
+    holiday : list of string, YYYY-MM-DD
+        Predefined holidays.
     '''
     
-    def __init__(self, data, holiday = None):
-        '''
-        Initialize.
-        
-        Parameters
-        ----------       
-        data : pandas.Series data with datetime-like index
-            Data to be analyzed
-        holiday : list of string
-            Predefined holidays.
-        '''
-        
+    def __init__(self, data, holiday = [], dropday = []):
+
         self.data = data
         self.sdate = data.index[0].date()
         self.edate = data.index[-1].date()
@@ -47,6 +43,7 @@ class WeeklyAnalysis(object):
         self.dailydata = {}
         self.weekmodel = {}
         self.holiday = holiday
+        self.dropday = dropday
         self.columns = [('0' + str(i) + ':00')[-5:] for i\
                         in np.arange(self.num)*self.freq]
         
@@ -74,19 +71,16 @@ class WeeklyAnalysis(object):
         '''
         if date == 7:
             # Offday = Saturday, Sunday and Holidays
-            start = np.mod(5 - self.sdate.weekday(), 7) # Saturday start
-            ind = np.arange(start, (self.edate - self.sdate).days + 1, 7)
-            tmp = np.append(ind, ind + 1)
+            tmp = self.dailydata['Saturday'].append(self.dailydata['Sunday'])
             for day in self.holiday:
-                tmp = np.append(tmp, np.where(np.array(self.df.index) == day)[0])
-            tmp.sort()
-            self.dailydata['Offday'] = self.df.loc[self.df.index[tmp]]
+                    tmp = tmp.append(self.df.loc[day])
+            self.dailydata['Offday'] = tmp.sort_index()
         else:
             start = np.mod(date - self.sdate.weekday(), 7)
             ind = np.arange(start, (self.edate - self.sdate).days + 1, 7)
             dailydata = np.array(self.df)[ind]
             tmpind = list(np.array(self.df.index)[ind])
-            tmpinddel = [tmpind.index(i) for i in tmpind if i in self.holiday]
+            tmpinddel = [tmpind.index(i) for i in self.holiday if i in tmpind]
             dailydata = np.delete(dailydata, tmpinddel, 0)
             ind = np.delete(ind, tmpinddel, 0)
             self.dailydata[_weekday[date]] = pd.DataFrame(dailydata, 
@@ -165,7 +159,20 @@ class WeeklyAnalysis(object):
                                   temp.min(),  temp.std()]
             self.weekmodel[args[0]] = daymodel
             return daymodel
-
+        
+    def _drop_from_model(self, days):
+        '''
+        Drop days before bilding model.   
+        
+        Parameters
+        ----------
+        days : list of string
+            Days to drop.
+        '''
+        for day_to_drop in days:
+            
+            ind = datetime.datetime.strptime(day_to_drop, '%Y-%m-%d').weekday()
+    
     def plot_weekmodel(self, *args):
         '''
         Plot regular wekkly model in matplotlib figure.
@@ -246,7 +253,7 @@ class WeeklyAnalysis(object):
         model = np.array(self.weekmodel['week'])
         index = pd.date_range(sdate, edate + datetime.timedelta(1), 
                               freq = str(self.freq) +'H')[:-1]
-        tmpind = pd.date_range(sdate, edate)
+        tmpind = list(pd.date_range(sdate, edate).strftime('%Y-%m-%d'))
         
         for i in np.arange(itera - 1):
             model = np.hstack([model, np.array(self.weekmodel['week'])])
@@ -261,14 +268,15 @@ class WeeklyAnalysis(object):
                 hol = self.holiday
             else:
                 hol = holiday
-                
-            for i in np.arange(len(tmpind)):
-                if tmpind[i].strftime('%Y-%m-%d') in hol:
+
+            for day in hol:
+                if day in tmpind:
+                    i = tmpind.index(day)
                     model[:, self.num * i: self.num * i + self.num] =\
-                                                np.array(self.weekmodel['Offday'])
+                                    np.array(self.weekmodel['Offday'])
+                                        
         return pd.DataFrame(model, columns = index,
                      index = ['Ave', 'Max', 'Min', 'Std'])
-
         
     def detect(self, data = None, holiday = False, show = True):
         '''
@@ -333,8 +341,31 @@ class WeeklyAnalysis(object):
             ax.grid()
             plt.show()
 
+    def update(self, newholiday = None, drop = None):
+        '''
+        Drop unusual days or add new holiday.
+        
+        Parameters
+        ----------
+        newholiday : list of string
+            List of new holidays date.
+        dropday : list of string
+            List of days to drop from model.
+        '''
+        if not hasattr(self, 'df'):
+            raise AttributeError('Please fit model before modifying!')
+        
+        if newholiday is not None:
+            for day in newholiday:
+                self.holiday.append(day)
+        
+        if drop is not None:
+            for day in drop:
+                self.dropday.append(day)
+                
         
         
+            
         
         
         
