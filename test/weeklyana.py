@@ -30,7 +30,7 @@ class WeeklyAnalysis(object):
         Predefined holidays.
     '''
     
-    def __init__(self, data, holiday = [], dropday = []):
+    def __init__(self, data):
 
         self.data = data
         self.sdate = data.index[0].date()
@@ -40,10 +40,6 @@ class WeeklyAnalysis(object):
         self.lindex = pd.date_range(self.sdate, self.edate)
         self.sindex = pd.date_range(self.sdate, self.edate + datetime.timedelta(1),
                                     freq = str(self.freq) +'H')[:-1]
-        self.dailydata = {}
-        self.weekmodel = {}
-        self.holiday = holiday
-        self.dropday = dropday
         self.columns = [('0' + str(i) + ':00')[-5:] for i\
                         in np.arange(self.num)*self.freq]
         
@@ -72,8 +68,6 @@ class WeeklyAnalysis(object):
         if date == 7:
             # Offday = Saturday, Sunday and Holidays
             tmp = self.dailydata['Saturday'].append(self.dailydata['Sunday'])
-            for day in self.holiday:
-                    tmp = tmp.append(self.df.loc[day])
             self.dailydata['Offday'] = tmp.sort_index()
         else:
             start = np.mod(date - self.sdate.weekday(), 7)
@@ -119,7 +113,77 @@ class WeeklyAnalysis(object):
         ax.set_xticklabels(self.columns)
         ax.set_title('Daily traffic on %s' % args[0])
         fig.show()
-    
+        
+    def _drop_before_model(self, days):
+        '''
+        Drop days before bilding model.   
+        
+        Parameters
+        ----------
+        days : list of string
+            Days to drop.
+        '''
+        if self.droped_days == {}:
+            for day in _keys:
+                self.droped_days[day] = pd.DataFrame()
+        
+        while len(days):
+            day_to_drop = days.pop()
+            
+            if day_to_drop in self.dropedday:
+                continue
+            
+            self.dropedday.append(day_to_drop)
+            if day_to_drop in self.holiday:
+                pddata = self.dailydata['Offday'].loc[day_to_drop]
+                self.droped_days['Offday'] = \
+                            self.droped_days['Offday'].append(pddata)
+                self.dailydata['Offday'] = self.dailydata['Offday'].drop([day_to_drop])
+                
+                continue
+            
+            ind = datetime.datetime.strptime(day_to_drop, '%Y-%m-%d').weekday()
+            if ind < 5:
+                pddata = self.dailydata[_weekday[ind]].loc[day_to_drop]
+                self.droped_days[_weekday[ind]] = \
+                            self.droped_days[_weekday[ind]].append(pddata)
+                self.dailydata[_weekday[ind]] = self.dailydata[_weekday[ind]].drop([day_to_drop])
+            else:
+                pddata = self.dailydata[_weekday[ind]]
+                self.droped_days[_weekday[ind]] = \
+                            self.droped_days[_weekday[ind]].append(pddata.loc[day_to_drop])
+                self.droped_days['Offday'] = \
+                            self.droped_days['Offday'].append(pddata.loc[day_to_drop])       
+                self.dailydata[_weekday[ind]] = self.dailydata[_weekday[ind]].drop([day_to_drop])
+                self.dailydata['Offday'] = self.dailydata['Offday'].drop([day_to_drop])
+        
+        for keyday in _keys:
+            self.droped_days[keyday] =  self.droped_days[keyday].sort_index()
+        
+        self.dropedday.sort()
+        
+    def _add_to_holiday(self, days):
+        '''
+        Add new holidays to model.   
+        
+        Parameters
+        ----------
+        days : list of string
+            Holidays to add.
+        '''
+        while len(days):
+            holid = days.pop()
+            if holid in self.holiday:
+                continue
+            
+            ind = datetime.datetime.strptime(holid, '%Y-%m-%d').weekday()
+            tmpdata = self.dailydata[_weekday[ind]].loc[holid]
+            self.dailydata['Offday'] = self.dailydata['Offday'].append(tmpdata)
+            self.dailydata[_weekday[ind]] = self.dailydata[_weekday[ind]].drop([holid])
+            self.holiday.append(holid)
+            
+        self.holiday.sort()
+            
     def _get_dailymodel(self, *args):
         '''
         Build daily model.   
@@ -153,26 +217,13 @@ class WeeklyAnalysis(object):
             for time in self.columns:
                 tmpdata = np.array(tmp[time])
                 mmax, mmin = np.percentile(tmp[time], [75, 25])
-                temp = tmpdata[np.where((tmpdata <= mmax  + 1.5 * (mmax - mmin)) & 
-                                 (tmpdata >= mmin - 1.5 * (mmax - mmin)))]
+                temp = tmpdata[np.where((tmpdata <= mmax  + 1.5 * (mmax - mmin)) \
+                                        & (tmpdata >= mmin - 1.5 * (mmax - mmin)))]
                 daymodel[time] = [temp.mean(), temp.max(), 
                                   temp.min(),  temp.std()]
             self.weekmodel[args[0]] = daymodel
             return daymodel
         
-    def _drop_from_model(self, days):
-        '''
-        Drop days before bilding model.   
-        
-        Parameters
-        ----------
-        days : list of string
-            Days to drop.
-        '''
-        for day_to_drop in days:
-            
-            ind = datetime.datetime.strptime(day_to_drop, '%Y-%m-%d').weekday()
-    
     def plot_weekmodel(self, *args):
         '''
         Plot regular wekkly model in matplotlib figure.
@@ -211,8 +262,7 @@ class WeeklyAnalysis(object):
         plt.grid()
         plt.show()
 
-        
-    def fit(self):
+    def fit(self, holiday = [], daytodrop = []):
         '''
         Train model with data.   
         
@@ -221,11 +271,18 @@ class WeeklyAnalysis(object):
         hol: boolean, default = False
             If True, take holiday effect into consideration.
         '''
+        self.dailydata = {}
+        self.weekmodel = {}
+        self.holiday = []
+        self.dropedday = []
+        self.droped_days = {}
         self._get_df()
         
         for i in np.arange(8):
             self._get_dailydata(i)
             
+        self._drop_before_model(daytodrop)
+        
         self._get_dailymodel()
     
     def _generate_model(self, sdate, edate, holiday = True):
@@ -317,7 +374,7 @@ class WeeklyAnalysis(object):
                 ind = event.ind
                 print('Time: %s, Rate: %.3f' %
                       (model.columns[ind].strftime('%Y-%m-%d %H:%m-%s')[0],
-                      np.take(tsdata, ind)))
+                      tsdata[ind]))
                 
             ind1 = np.where((tsdata >= below) & (tsdata <= above))
             if holiday is False:
@@ -356,12 +413,12 @@ class WeeklyAnalysis(object):
             raise AttributeError('Please fit model before modifying!')
         
         if newholiday is not None:
-            for day in newholiday:
-                self.holiday.append(day)
+            self._add_to_holiday(newholiday)
         
         if drop is not None:
-            for day in drop:
-                self.dropday.append(day)
+            self._drop_before_model(drop)
+            
+        self._get_dailymodel()
                 
         
         
