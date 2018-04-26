@@ -43,7 +43,7 @@ def getdata(devname, intf, sdate = None, edate = None, dbname, collection, featu
     
     cursor = MongoClient('mongodb://%s:%s@%s:27017' % 
                         ('username', 'password', 'host'))\
-                        [dbname][collection ]\
+                        [dbname][collection]\
                         .find({'device_name': devname, 
                         'date': {
                             '$gte': start_date,
@@ -62,7 +62,8 @@ def getdata(devname, intf, sdate = None, edate = None, dbname, collection, featu
             
             input_rate = float(oneInf[feature])
             valueArr.append(input_rate)           
-    timeseries = pd.Series(valueArr, index = timeArr)
+    timeseries = pd.DataFrameame({'data': valueArr, 'time' : timeArr},
+                                 columns = ['time', 'data'])
     
     return timeseries
 
