@@ -2,8 +2,10 @@
 An anomaly detector for online traffic data.
 
 ## Requirement
-- Pandas
-- Numpy
+- pandas
+- numpy
+- scikit-learn
 - pymongo
 - scipy
 - matplotlib
+- statsmodels(only for ARIMA)
