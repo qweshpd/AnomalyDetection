@@ -95,7 +95,7 @@ class WeeklyAnalysis(object):
             return None
         
         def _onpick(event):
-                print(event.artist)
+            print(event.artist)
                 
         fig, ax = plt.subplots()
         for i in np.arange(dailydata.shape[0]):
@@ -370,11 +370,17 @@ class WeeklyAnalysis(object):
         
         if where == 'both':
             printext.append('Above Normal Range:\n')
-            for i in indabove:
-                printext.append(data.index[i].strftime('%Y-%m-%d %H:%m:%S'))
+            if not len(indabove):
+                printext.append('None.\n')
+            else:
+                for i in indabove:
+                    printext.append(data.index[i].strftime('%Y-%m-%d %H:%m:%S'))
             printext.append('\nBelow Normal Range:\n')
-            for i in indbelow:
-                printext.append(data.index[i].strftime('%Y-%m-%d %H:%m:%S'))
+            if not len(indbelow):
+                printext.append('None.\n')
+            else:
+                for i in indbelow:
+                    printext.append(data.index[i].strftime('%Y-%m-%d %H:%m:%S'))
         elif where == 'above':
             for i in indabove:
                 printext.append(data.index[i].strftime('%Y-%m-%d %H:%m:%S'))
