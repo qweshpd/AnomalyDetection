@@ -77,7 +77,7 @@ class PatternAnalysis(object):
             for para in self.parameter:
                 print(para + '\t\t' + str(self.parameter[para]))
 
-    def analyze(self, dev_intf):
+    def analyze(self, data):
         '''
         Analyze a given device.
         
@@ -92,14 +92,9 @@ class PatternAnalysis(object):
             Algorithm outputs.
 
         '''
-        # print('Loading Data...')
         logger.debug(' ' + self.__class__.__name__)
         timevar = np.array([])
         timevar = np.append(timevar, time.clock())  
-        
-        logger.debug(' Loading...')        
-        data = self._getdata(dev_intf)
-        timevar = np.append(timevar, time.clock())
         
         logger.debug(' Preprocessing...')
         predata = self._preprocess(data)
@@ -115,75 +110,12 @@ class PatternAnalysis(object):
         
         timeused = timevar[1:] - timevar[:-1]
         logger.debug(' Total time used:\t%.6f seconds.\n\
-                     \t\t\tLoad Data\t\t%.6f seconds\n\
                      \t\t\tPreprocess\t\t%.6f seconds\n\
                      \t\t\tProcess\t\t\t%.6f seconds\n\
                      \t\t\tOutput \t\t\t%.6f seconds' 
-                     % (timevar[-1] - timevar[0], timeused[0], timeused[1], timeused[2], timeused[3]))
+                     % (timevar[-1] - timevar[0], timeused[0], timeused[1], timeused[2]))
         
         return output
-    
-    def qapp_analyze(self, qmap):
-        '''
-        Qapp-based analysis.
-        '''
-        # print('Loading Data...')
-
-        logger.debug(' ' + self.__class__.__name__)
-        timevar = np.array([])
-        timevar = np.append(timevar, time.clock())  
-        
-        logger.debug(' Loading...')
-        qdata = self._getdevice(qmap)
-        timevar = np.append(timevar, time.clock())
-            
-        logger.debug(' Preprocessing...')
-        predata = self._preprocess(qdata)
-        timevar = np.append(timevar, time.clock())
-        
-        logger.debug(' Processing...')
-        prodata = self._process(predata)
-        timevar = np.append(timevar, time.clock())
-        
-        logger.debug(' Outputting...')
-        qinfo = self._qoutput(qdata, prodata)
-        timevar = np.append(timevar, time.clock())
-        
-        timeused = timevar[1:] - timevar[:-1]
-        logger.debug(' Total time used:\t%.6f seconds.\n\
-                     \t\t\tLoad Data\t\t%.6f seconds\n\
-                     \t\t\tPreprocess\t\t%.6f seconds\n\
-                     \t\t\tProcess\t\t\t%.6f seconds\n\
-                     \t\t\tOutput \t\t\t%.6f seconds' 
-                     % (timevar[-1] - timevar[0], timeused[0], timeused[1], 
-                        timeused[2], timeused[3]))
-
-        return qinfo
-    
-    def _gedevice(self, qmap):
-        pass
-    
-    def _getdata(self, dev_intf):
-
-        if type(dev_intf) == type(''): # string type input data
-            dev, intf = dev_intf.split('_')
-            return loadata.getdata(dev, intf,
-                                   sdate = self.startdate, edate = self.endate)
-        elif type(dev_intf) == type([]):# list type input data
-            if type(dev_intf[0][0]) == type(' '): # list of interface
-                datalist = []
-                for devname_interface in dev_intf:
-                    dev, intf = devname_interface.split('_')
-                    datalist.append(loadata.getdata(dev, intf, 
-                                    sdate = self.startdate, edate = self.endate))
-                return datalist
-            else: # list of number
-                return dev_intf
-        elif type(dev_intf) == np.ndarray: # ndarray type input data
-            return pd.Series(dev_intf)
-        elif type(dev_intf) == pd.Series: # Series type input data
-            return dev_intf
-        
     
     def _preprocess(self, data):
         return data
@@ -198,9 +130,6 @@ class PatternAnalysis(object):
         print(PatternAnalysis.__doc__)
         print('    ' + self.__class__.__name__)
         print(self.__doc__)    
-    
-    def _qoutput(self, qdata, prodata):
-        pass
         
 #%% local peak analysis
  
