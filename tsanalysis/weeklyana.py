@@ -26,8 +26,6 @@ class WeeklyAnalysis(object):
     ----------       
     data : pandas.Series data with datetime-like index
         Data to be analyzed.
-    holiday : list of string, YYYY-MM-DD
-        Predefined holidays.
     '''
     
     def __init__(self, data):
@@ -264,8 +262,8 @@ class WeeklyAnalysis(object):
         
         Parameters
         ----------
-        hol: boolean, default = False
-            If True, take holiday effect into consideration.
+        holiday: list of string, YYYY-MM-DD
+            Predefined holidays.
         '''
         self.dailydata = {}
         self.weekmodel = {}
