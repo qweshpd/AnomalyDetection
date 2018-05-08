@@ -55,7 +55,7 @@ class WeeklyDecomposition(object):
             sec = self._convert_time(day_of_data)
             date = _eachday[date_ind]
             slice_of_data = np.array(self.data.loc[day_of_data])
-            self.dailydata[date].loc[day_of_data] = [slice_of_data, sec]
+            self.dailydata[date].loc[day_of_data] = np.hstack([slice_of_data, sec])
         
         
     def _convert_time(self, daytime):
@@ -101,24 +101,27 @@ class WeeklyDecomposition(object):
             else:
                 for i in np.arange(8):
                     self.plot_daily(i)
-                    return None
+                return None
         else:
             for i in np.arange(8):
                 self.plot_daily(i)
-                return None
+            return None
         
         def _onpick(event):
             time = dailydata.index[event.ind]
             print(time)
-                
-        data = np.array(dailydata)
+            
+        data = np.array(dailydata)                
+        xtic = pd.date_range('2019-01-01', '2019-01-02', freq = 'S')[:-1]
+        xaxis = [xtic[int(i)] for i in data[:, 1]]
         fig, ax = plt.subplots()
-        ax.scatter(data[:,1], data[:, 0], picker = True)
+        ax.scatter(xaxis, data[:, 0], picker = True)
         fig.canvas.mpl_connect('pick_event', _onpick)    
-        ax.legend().draggable()
-        ax.set_ylim(0, np.ceil(1.04 * max(self.data)))
+#        ax.legend().draggable()
+#        ax.set_ylim(0, np.ceil(1.04 * np.max(np.array(self.data))))
+        ax.set_xlim(xtic[0], xtic[-1])
 #        pd.DataFrame(np.array(dailydata)).boxplot()
-#        ax.set_xticklabels(self.columns)
+#        ax.set_xticklabels(pd.date_range('2019-01-01', '2019-01-02', freq = 'S')[:-1])
         ax.set_title('Daily traffic on %s' % _eachday[args[0]])
         fig.show()
         
