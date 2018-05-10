@@ -102,7 +102,6 @@ class WeeklyDecomposition(object):
         for day in _eachday[:-1]:
             tmp = np.hstack([tmp, np.array(self._build_model(day))])
             col.append([day[:3] + i for i in self.columns])
-        print(len(col))
         self.dailymodel['week'] = pd.DataFrame(tmp, columns = np.hstack(col), 
                                                index = _index)
         _ = self._build_model('Offday')
@@ -221,6 +220,154 @@ class WeeklyDecomposition(object):
         plt.grid()
         plt.show()
         
+        
+    def _generate_model(self, sdate, edate, holiday = True):
+        '''
+        Generate data model within date range with freqency.   
+        
+        Parameters
+        ----------
+        sdate : string or datetime-like
+            Left bound for generating dates
+        edate : string or datetime-like
+            Right bound for generating dates
+        holiday ： boolean, or list of holidays' date, default True
+            
+        Returns
+        ----------
+        model : pandas.DataFrame
+            Data model in the date range.
+        '''
+        s = sdate.weekday()
+        e = edate.weekday()
+        startday = sdate - timedelta(s)
+        endday = edate + timedelta(6 - e)
+        itera = int(((endday - startday).days + 1) / 7)
+        model = np.array(self.dailymodel['week'])
+        index = pd.date_range(sdate, edate + timedelta(1), 
+                              freq = str(self.freq) +'H')[:-1]
+        tmpind = list(pd.date_range(sdate, edate).strftime('%Y-%m-%d'))
+        
+        for i in np.arange(itera - 1):
+            model = np.hstack([model, np.array(self.dailymodel['week'])])
+            
+        if e == 6:
+            model = model[:, self.num * s:]
+        else:
+            model = model[:, self.num * s:-((6 - e)*self.num)]
+            
+        if holiday is not False:
+            if holiday is True:
+                hol = self.holiday
+            else:
+                hol = holiday
+
+            for day in hol:
+                if day in tmpind:
+                    i = tmpind.index(day)
+                    model[:, self.num * i: self.num * i + self.num] =\
+                                    np.array(self.dailymodel['Offday'])
+                                        
+        return pd.DataFrame(model, columns = index, index = _index)        
+        
+        
+    def detect(self, data = None, holiday = False, where = 'both', show = True):
+        '''
+        Fit trained model to data, and get anomaly data point.   
+        
+        Parameters
+        ----------
+        data :  pandas.Series data
+            Data to test.
+        hol: boolean, default = False
+            If True, take holiday effect into consideration.
+        where : string, ['above', 'below', 'both']
+        show : boolean, default = True
+            If True, plot daily data in matplotlib figure.
+            
+        Returns
+        ----------
+        anomalies : numpy.array of strings
+            Anomalies date and time.
+        '''
+        if data is None:
+            data = self.data
+        sdate = data.index[0].date()
+        edate = data.index[-1].date()
+        model = self._generate_model(sdate, edate, holiday = holiday)
+        
+        below = model.loc['Ave'] - _ntimes * model.loc['Std']
+        above = model.loc['Ave'] + _ntimes * model.loc['Std']
+        below[np.where(below < 0)[0]] = 0
+        
+        tsdata = np.array(data)
+        indabove = np.where(tsdata > above)[0]
+        indbelow = np.where(tsdata < below)[0]
+        
+        printext = []
+        
+        if where == 'both':
+            printext.append('Above Normal Range:\n')
+            if not len(indabove):
+                printext.append('None.\n')
+            else:
+                for i in indabove:
+                    printext.append(data.index[i].strftime('%Y-%m-%d %H:%m:%S'))
+            printext.append('\nBelow Normal Range:\n')
+            if not len(indbelow):
+                printext.append('None.\n')
+            else:
+                for i in indbelow:
+                    printext.append(data.index[i].strftime('%Y-%m-%d %H:%m:%S'))
+        elif where == 'above':
+            for i in indabove:
+                printext.append(data.index[i].strftime('%Y-%m-%d %H:%m:%S'))
+        elif where == 'below':
+            for i in indbelow:
+                printext.append(data.index[i].strftime('%Y-%m-%d %H:%m:%S'))
+            
+        for i in printext:
+            print(i)
+            
+        if show:
+            def _onpick(event):
+                ind = event.ind
+                print('\nTime: %s, Rate: %.3f' %
+                      (data.index[ind].strftime('%Y-%m-%d %H:%m:%S')[0],
+                      tsdata[ind]))
+                
+            ind1 = np.where((tsdata >= below) & (tsdata <= above))
+            if holiday is False:
+                title = 'Data model without holidays.'
+            else:
+                title = 'Data model with customized holidays.'
+                
+            fig, ax = plt.subplots()
+            ax.plot(model.columns, model.loc['Ave'], '-',
+                      color = '#0072B2', label = 'Average')
+            ax.fill_between(model.columns, above, below, 
+                            color = '#87CEEB', label = 'Confidence Inerval')
+            
+            ax.scatter(model.columns[ind1], tsdata[ind1], c = 'k', 
+                        label = 'Normal', picker = True)
+            
+            if where == 'both':
+                ax.scatter(model.columns[indabove], tsdata[indabove],  c = 'r', 
+                            label = 'Above Normal', picker = True)
+                ax.scatter(model.columns[indbelow], tsdata[indbelow],  c = 'pink', 
+                            label = 'Below Normal', picker = True)
+            elif where == 'above':
+                ax.scatter(model.columns[indabove], tsdata[indabove],  c = 'r', 
+                            label = 'Anormal', picker = True)
+            elif where == 'below':
+                ax.scatter(model.columns[indbelow], tsdata[indbelow],  c = 'r', 
+                            label = 'Anormal', picker = True)
+            
+            ax.set_title(title)
+            ax.legend().draggable()       
+            fig.canvas.mpl_connect('pick_event', _onpick)             
+            ax.grid()
+            plt.show()
         
         
         
