@@ -479,8 +479,9 @@ class StatusAnalysis(PatternAnalysis):
         plt.plot(data, color = 'blue', label = 'data')
         plt.plot([], [], color = 'red', label = 'change')
         for i in index:
-            plt.plot([i - 1, i], data[i - 1 : i + 1], 'r-', 
-                     marker = 'o')
+            if i < len(data) - 1:
+                plt.plot([i - 1, i], data[i - 1 : i + 1], 'r-', 
+                         marker = 'o')
         plt.legend()
         plt.show()
             
@@ -582,16 +583,19 @@ class SaturationAnalysis(PatternAnalysis):
         return inds
     
     def _getoutput(self, data, inds):
-        
+        try:
+            index = data.index
+        except:
+            index = np.arange(len(data))
         print('Initial Time \t\t\tFinal Time')
         for i in inds:
-            print(str(data.index[i[0]]) + '\t' + str(data.index[i[1]]))
+            print(str(index[i[0]]) + '\t' + str(index[i[1]]))
             
         if self.parameter['show']:
             plt.figure()
             plt.plot(data)
             for (indi, indf) in inds:
-                plt.plot(data.index[indi:indf], data[indi:indf], 'r-')
+                plt.plot(index[indi:indf], data[indi:indf], 'r-')
                 
         return inds
 
