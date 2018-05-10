@@ -19,7 +19,7 @@ rcParams['figure.figsize'] = 15, 6
 
 import logging
 logger = logging.getLogger()
-logger.setLevel(logging.DEBUG)
+logger.setLevel(logging.ERROR)
 formatter = logging.Formatter('[%(asctime)-15s] - %(levelname)-8s - %(message)s')
 
 sh = logging.StreamHandler()
@@ -228,8 +228,16 @@ class CycleAnalysis(PatternAnalysis):
         frequency = process.detect_peaks(abs(fftf)[0: num],
                         mph = self.parameter['mph'],
                         mpd = self.parameter['mpd'],
-                        threshold = self.parameter['thre']) / 12
-        return [i for i in frequency if i < self.parameter['mc']]
+                        threshold = self.parameter['thre']) 
+        
+        if self.parameter['show']:
+            plt.figure()
+            plt.plot(abs(fftf)[0: num])
+            for i in frequency:
+                plt.scatter(i, abs(fftf)[0: num][i], color = 'r')
+            plt.show()
+            
+        return [i for i in frequency/12 if i < self.parameter['mc']]
                                     
     def _getoutput(self, data, frequency):
         if len(frequency):
@@ -237,18 +245,7 @@ class CycleAnalysis(PatternAnalysis):
         else:
             print('No cycle found with the given conditions.\n')
             
-#    def _qoutput(self, qdata, frequency):
-#        
-#        if len(frequency):
-#            DrawDeviceNote(dev_name, dev_name, interf + ': ' + 
-#                           ' days, '.join('%.3f' % i for i in frequency) + ' days', 
-#                           NoteType.Append)
-#        # AddMessage('     Cycle Detected: ' + ' days, '.join('%.3f' % i for i in frequency) + ' days')
-#        else:
-#            DrawDeviceNote(dev_name, dev_name, 
-#                           'No cycle found with the given conditions.',
-#                           NoteType.Append)
-#        # AddMessage('     No cycle found with the given conditions.')
+
 #%% similarity analysis   
 
 class SimilarityAnalysis(PatternAnalysis):

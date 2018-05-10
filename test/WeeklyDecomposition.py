@@ -369,7 +369,7 @@ class WeeklyDecomposition(object):
             ax.grid()
             plt.show()
         
-        
+        return indabove, indbelow
         
         
         
