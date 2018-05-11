@@ -152,6 +152,11 @@ class LocalPeakanalysis(PatternAnalysis):
         Daximum number of peaks to be shown (in descending order).
     show : bool, optional (default = False)
         If True, plot data in matplotlib figure.
+        
+    Returns
+    ----------
+    index : numpy array-like
+        Indeces of local peaks.
     '''
     
     def __init__(self):
@@ -188,10 +193,13 @@ class LocalPeakanalysis(PatternAnalysis):
         if self.parameter['show']:
             plt.figure()
             plt.plot(data)
+            plt.scatter([], [], color = 'red', label = 'Local Peak')
             for timestamp in ind:
                 plt.scatter(data.index[index[timestamp]], 
                             data[index[timestamp]], color = 'red')
-        
+            p = plt.legend()
+            if p:
+                p.draggable()
         return index
 
 #%% cycle analysis
@@ -207,6 +215,11 @@ class CycleAnalysis(PatternAnalysis):
         Maximum cycle to be detected
     show : bool, optional (default = False)
         If True, plot data in matplotlib figure.
+        
+    Returns
+    ----------
+    freq : 1-D array like
+        List of frequencies, None if no frequency.
     '''
     
     def __init__(self):
@@ -232,9 +245,9 @@ class CycleAnalysis(PatternAnalysis):
         
         if self.parameter['show']:
             plt.figure()
-            plt.plot(abs(fftf)[0: num])
             for i in frequency:
                 plt.scatter(i, abs(fftf)[0: num][i], color = 'r')
+            plt.stem(abs(fftf)[0: num], color = '#87CEEB')
             plt.show()
             
         return [i for i in frequency/12 if i < self.parameter['mc']]
@@ -242,8 +255,11 @@ class CycleAnalysis(PatternAnalysis):
     def _getoutput(self, data, frequency):
         if len(frequency):
             print(' days, '.join('%.3f' % i for i in frequency) + ' days\n')
+            return frequency
         else:
             print('No cycle found with the given conditions.\n')
+            return None
+        
             
 
 #%% similarity analysis   
