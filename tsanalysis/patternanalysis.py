@@ -3,7 +3,7 @@
 import pandas as pd
 import numpy as np
 import math
-from libs import loadata, process, preproc
+from libs import process, preproc
 import scipy.stats
 import time
 
@@ -246,8 +246,8 @@ class CycleAnalysis(PatternAnalysis):
         if self.parameter['show']:
             plt.figure()
             for i in frequency:
-                plt.scatter(i, abs(fftf)[0: num][i], color = 'r')
-            plt.stem(abs(fftf)[0: num], color = '#87CEEB')
+                plt.scatter(i - 1, abs(fftf)[0: num][i], color = 'r')
+            plt.stem(abs(fftf)[1: num], color = '#87CEEB')
             plt.show()
             
         return [i for i in frequency/12 if i < self.parameter['mc']]
