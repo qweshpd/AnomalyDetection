@@ -15,7 +15,7 @@ rcParams['figure.figsize'] = 15, 6
 import warnings
 warnings.filterwarnings("ignore")
 
-class AutoARIAM(object):
+class AutoARIMA(object):
     '''
     Compute parameters p,q,dautomatically based on data features.
     Required library: numpy, pandas, statsmodels.
