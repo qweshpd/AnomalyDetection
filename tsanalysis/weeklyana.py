@@ -205,6 +205,19 @@ class WeeklyAnalysis(object):
             self.weekmodel['week'] = pd.DataFrame(daymodel,
                           columns = np.hstack(col), index = index)
             self._get_dailymodel('Offday')
+        elif args[0] == 'weekday':
+            tmp = pd.DataFrame(columns = self.columns)
+            for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]:
+                tmp = tmp.append(self.dailydata[day])
+            daymodel = pd.DataFrame(index = index)
+            for time in self.columns:
+                tmpdata = np.array(tmp[time])
+                mmax, mmin = np.percentile(tmp[time], [75, 25])
+                temp = tmpdata[np.where((tmpdata <= mmax  + 1.5 * (mmax - mmin)) \
+                                        & (tmpdata >= mmin - 1.5 * (mmax - mmin)))]
+                daymodel[time] = [temp.mean(), temp.max(), 
+                                  temp.min(),  temp.std()]
+            self.weekmodel['weekday'] = daymodel
         else:
             tmp = self.dailydata[args[0]]
             daymodel = pd.DataFrame(index = index)
