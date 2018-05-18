@@ -107,6 +107,7 @@ class AutoARIMA(object):
         if res[1]:    # if stationary, return d = 0
             self.validts = timeseries
             self.d = 0 
+            self.head = []
         else:    # if not stationary, try difference once
             tempts = np.diff(timeseries, n = 1)
             res = self._valid_test(tempts, nlag = nlag, conf = conf, 
