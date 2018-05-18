@@ -204,7 +204,10 @@ class AutoARIMA(object):
         
         if 'd' in kwargs.keys():
             self.d = kwargs['d']
-            if self.d == 1:
+            self.validts = np.diff(timeseries, n = self.d)
+            if self.d == 0:
+                self.head = []
+            elif self.d == 1:
                 self.head = timeseries[0]
             elif self.d == 2:
                 self.head = [timeseries[1] - timeseries[0], timeseries[0]]
