@@ -62,7 +62,7 @@ def getdata(devname, intf, sdate = None, edate = None, dbname, collection, featu
             
             input_rate = float(oneInf[feature])
             valueArr.append(input_rate)           
-    timeseries = pd.DataFrameame({'data': valueArr, 'time' : timeArr},
+    timeseries = pd.DataFrame({'data': valueArr, 'time' : timeArr},
                                  columns = ['time', 'data'])
     
     return timeseries

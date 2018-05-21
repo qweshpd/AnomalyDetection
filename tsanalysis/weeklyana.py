@@ -205,6 +205,8 @@ class WeeklyAnalysis(object):
             self.weekmodel['week'] = pd.DataFrame(daymodel,
                           columns = np.hstack(col), index = index)
             self._get_dailymodel('Offday')
+            self._get_dailymodel('weekday')
+        
         elif args[0] == 'weekday':
             tmp = pd.DataFrame(columns = self.columns)
             for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"]:
@@ -218,6 +220,7 @@ class WeeklyAnalysis(object):
                 daymodel[time] = [temp.mean(), temp.max(), 
                                   temp.min(),  temp.std()]
             self.weekmodel['weekday'] = daymodel
+        
         else:
             tmp = self.dailydata[args[0]]
             daymodel = pd.DataFrame(index = index)
