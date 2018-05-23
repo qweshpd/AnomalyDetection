@@ -59,15 +59,16 @@ class SparkWeekly(object):
         data : pandas.Series data with datetime-like index
             Data to be analyzed.
         '''
+        sc = self.sc
         holiday = self.holiday
         data = self.data
         freq = self.freq
         tmp_data = np.vstack((list(data.index), list(data))).T
         
 #        hol_day = self.sc.parallelize(tmp_data).filter(lambda x: x[0].strftime('%Y-%m-%d') in self.holiday)
-        reg_day = self.sc.parallelize(tmp_data).filter(lambda x: x[0].strftime('%Y-%m-%d') not in holiday)        
-        off_day = self.sc.parallelize(tmp_data).filter(lambda x: (x[0].strftime('%Y-%m-%d') in holiday) or (x[0].weekday() > 4))
-        
+        reg_day = sc.parallelize(tmp_data).filter(lambda x: x[0].strftime('%Y-%m-%d') not in holiday)        
+        off_day = sc.parallelize(tmp_data).filter(lambda x: (x[0].strftime('%Y-%m-%d') in holiday) or (x[0].weekday() > 4))
+
         reg_day_data = reg_day\
                   .map(lambda x:(str(x[0].weekday()) + ('0' + str(int(x[0].hour/freq)))[-2:], [x[1], x[0]]))\
                   .reduceByKey(lambda x,y:np.vstack((np.array(x),np.array(y)))).sortByKey()
@@ -76,12 +77,27 @@ class SparkWeekly(object):
                   .map(lambda x:(('0' + str(int(x[0].hour/freq)))[-2:], [x[1], x[0]]))\
                   .reduceByKey(lambda x,y:np.vstack((np.array(x),np.array(y)))).sortByKey()
         
+        self.reg_day_data = reg_day_data
+        self.off_day_data = off_day_data
+                
+        tmp = pd.DataFrame([])
+        col = []
         for i in np.arange(7):
+            
             tmp_data = reg_day_data.filter(lambda x: x[0].startswith(str(i)))\
-                 .map(lambda x:(x[0][1:], x[1])).collectAsMap()
-            self.dailydata[_eachday[i]] = tmp_data
+                 .map(lambda x:(x[0][1:], x[1]))
+            self.dailydata[_eachday[i]] = tmp_data.collectAsMap()                 
+                 
+#            model = tmp_data.map(stat).collectAsMap()
+#            modeldf = pd.DataFrame(model, columns=self.columns, index=_index)
+#            self.dailymodel[_eachday[i]] = modeldf
+#            col.append([_eachday[i][:3] + k for k in self.columns])
+#            tmp = tmp.T.append(modeldf.T).T
 
         self.dailydata['Offday'] = off_day_data.map(lambda x:(x[0][1:], x[1])).collectAsMap()
+  
+        tmp.columns = col
+        self.dailydata['Week'] = tmp
         
         return reg_day_data, off_day_data
         
@@ -89,17 +105,8 @@ class SparkWeekly(object):
         print(stat(('0', np.zeros((2,2)))))
         self.data = data
         reg_day_data, off_day_data = self._extract_day()
-        tmp = pd.DataFrame([])
-        col = []
-        for i in np.arange(7):
-            tmp_df = self._build_model(reg_day_data.filter(lambda x: x[0].startswith(str(i))))
-            self.dailymodel[_eachday[i]] = tmp_df
-            col.append([_eachday[i][:3] + k for k in self.columns])
-#            tmp = tmp.T.append(tmp_df.T).T
-#        tmp.columns = col
         
-        self.dailymodel['Offday'] = self._build_model(off_day_data)
-        self.dailymodel['Week'] = tmp
+
         
     def _build_model(self, RDDdata):
         '''
@@ -111,7 +118,7 @@ class SparkWeekly(object):
             Day to build daily model.
         '''
         col = self.columns
-#        model = RDDdata.map(lambda x: (x[0], x[1][:,0].mean())).collectAsMap()
+        model = RDDdata.map(lambda x: (x[0], x[1][:,0].mean())).collectAsMap()
         model = RDDdata.map(stat).collectAsMap()
         modeldf = pd.DataFrame(model, columns=col, index=_index)
         
