@@ -3,28 +3,18 @@
 
 import numpy as np
 import pandas as pd
-import datetime
+#import datetime
+from tpk import stat
 
 import matplotlib.pylab as plt
 plt.rcParams['figure.figsize'] = 15, 6
-
-#%%
-
-def _stat(data):
-    tmp = np.array(data)
-    mmax, mmin = np.percentile(tmp, [75, 25])
-    nordata = tmp[np.where((tmp <= mmax + 1.5 * (mmax - mmin))\
-                         & (tmp >= mmin - 1.5 * (mmax - mmin)))]
-    return nordata 
-
-
 
 _eachday = ["Monday", "Tuesday", "Wednesday", "Thursday", 
             "Friday", "Saturday","Sunday", "Offday"]
 _ntimes = 3
 _index = ['Ave', 'Max', 'Min', 'Std']
 
-class Weekly(object):
+class SparkWeekly(object):
     '''
     Decompose 1-D timeseries data based on weekliy information with spark.
     
@@ -96,9 +86,20 @@ class Weekly(object):
         return reg_day_data, off_day_data
         
     def fit(self, data):
+        print(stat(('0', np.zeros((2,2)))))
         self.data = data
         reg_day_data, off_day_data = self._extract_day()
+        tmp = pd.DataFrame([])
+        col = []
+        for i in np.arange(7):
+            tmp_df = self._build_model(reg_day_data.filter(lambda x: x[0].startswith(str(i))))
+            self.dailymodel[_eachday[i]] = tmp_df
+            col.append([_eachday[i][:3] + k for k in self.columns])
+#            tmp = tmp.T.append(tmp_df.T).T
+#        tmp.columns = col
         
+        self.dailymodel['Offday'] = self._build_model(off_day_data)
+        self.dailymodel['Week'] = tmp
         
     def _build_model(self, RDDdata):
         '''
@@ -109,59 +110,14 @@ class Weekly(object):
         RDDday : spark.RDD object
             Day to build daily model.
         '''
+        col = self.columns
+#        model = RDDdata.map(lambda x: (x[0], x[1][:,0].mean())).collectAsMap()
+        model = RDDdata.map(stat).collectAsMap()
+        modeldf = pd.DataFrame(model, columns=col, index=_index)
         
+        return modeldf
         
-        
-        
-        day_model = RDDdata.map(lambda x:(x[0], _stat(x[1][1])))
-        
-        
-        
-        tmpdict = {}
-        if day == 'Offday':
-            tmpdata = np.vstack([np.array(self.dailydata[i]) for i in _eachday[-3:]])
-        else:
-            tmpdata = np.array(self.dailydata[day])
-        
-        for time in self.columns:
-            tmpdict[time] = []
-        
-        for i in np.arange(tmpdata.shape[0]):
-            ind = int(np.round(tmpdata[i, 1] / 3600 / self.freq))
-            if ind == self.num:
-                ind -= 1
-            tmpdict[self.columns[ind]].append(tmpdata[i, 0])
-            
-        for time in self.columns:
-            time_tmp = np.array(tmpdict[time])
-            mmax, mmin = np.percentile(tmpdict[time], [75, 25])
-            temp = time_tmp[np.where((time_tmp <= mmax + 1.5 * (mmax - mmin))\
-                                  & (time_tmp >= mmin - 1.5 * (mmax - mmin)))]
-            self.dailymodel[day][time] = [temp.mean(), temp.max(), 
-                                          temp.min(),  temp.std()]
-            
-        return self.dailymodel[day]
 #%%%       
-    def decompose(self, data, holiday = []):
-        '''
-        Decompose data into everyday.
-        
-        Parameters
-        ----------       
-        holiday: list of string, YYYY-MM-DD
-            Predefined holidays.
-        '''
-        self.data = data
-        _ = self._extract_day()
-        tmp = np.array([[],[],[],[]])
-        col = []
-        for day in _eachday[:-1]:
-            tmp = np.hstack([tmp, np.array(self._build_model(day))])
-            col.append([day[:3] + i for i in self.columns])
-        self.dailymodel['week'] = pd.DataFrame(tmp, columns = np.hstack(col), 
-                                               index = _index)
-        _ = self._build_model('Offday')
-
             
     def plot_daily(self, *args):
         '''
