@@ -12,8 +12,7 @@ warnings.filterwarnings("ignore")
 
 # matplotlib basic setup
 import matplotlib.pylab as plt
-from matplotlib.pylab import rcParams
-rcParams['figure.figsize'] = 15, 6
+plt.rcParams['figure.figsize'] = 15, 6
 
 #%%  logger setup
 

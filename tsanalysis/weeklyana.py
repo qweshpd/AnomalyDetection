@@ -6,8 +6,7 @@ import pandas as pd
 import datetime
 
 import matplotlib.pylab as plt
-from matplotlib.pylab import rcParams
-rcParams['figure.figsize'] = 15, 6
+plt.rcParams['figure.figsize'] = 15, 6
 
 _weekday = ["Monday", "Tuesday", "Wednesday", "Thursday", 
             "Friday", "Saturday","Sunday"]

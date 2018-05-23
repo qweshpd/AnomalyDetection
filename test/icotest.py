@@ -7,8 +7,7 @@ import pattern.patternanalysis as pa
 import libs.preproc as pp
 
 import matplotlib.pylab as plt
-from matplotlib.pylab import rcParams
-rcParams['figure.figsize'] = 15, 6
+plt.rcParams['figure.figsize'] = 15, 6
 
 import warnings
 warnings.filterwarnings("ignore")

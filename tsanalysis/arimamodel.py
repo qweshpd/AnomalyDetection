@@ -9,8 +9,7 @@ import statsmodels.tsa.stattools as st
 from statsmodels.tsa.arima_model import ARIMA
 
 import matplotlib.pylab as plt
-from matplotlib.pyplot import rcParams
-rcParams['figure.figsize'] = 15, 6
+plt.rcParams['figure.figsize'] = 15, 6
 
 import warnings
 warnings.filterwarnings("ignore")
