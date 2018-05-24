@@ -144,37 +144,32 @@ class SparkWeekly(object):
             Specific date.
         '''
         
-        if args:
-            if args[0] in np.arange(8):
-                dailydata = self.dailydata[_eachday[args[0]]]
-            else:
-                for i in np.arange(8):
-                    self.plot_daily(i)
-                return None
+        if args and (args[0] in np.arange(8)):
+            datadic = self.dailydata[_eachday[args[0]]]
         else:
             for i in np.arange(8):
                 self.plot_daily(i)
-            return None
-        
+            return
+
+        data = np.array([[], [], []]).T
+        for xtic in datadic:
+            tp = np.hstack([datadic[xtic],\
+                            self.freq*int(xtic)*np.ones((datadic[xtic].shape[0], 1))])
+            data = np.vstack((data, tp))
+            
         def _onpick(event):
-            time = dailydata.index[event.ind]
+            time = data[event.ind, 1]
             print(time)
             
-        data = np.array(dailydata)                
-        xtic = pd.date_range('2018-01-01', '2018-01-02', freq = 'S')[:-1]
-        xaxis = [xtic[int(i)] for i in data[:, 1]]
         fig, ax = plt.subplots()
-        ax.scatter(xaxis, data[:, 0], picker = True)
+        ax.scatter(data[:, 2], data[:, 0], picker = True)
         fig.canvas.mpl_connect('pick_event', _onpick)    
 #        ax.legend().draggable()
-#        ax.set_ylim(0, np.ceil(1.04 * np.max(np.array(self.data))))
-        ax.set_xlim(xtic[0], xtic[-1])
-#        pd.DataFrame(np.array(dailydata)).boxplot()
-#        ax.set_xticklabels(pd.date_range('2019-01-01', '2019-01-02', freq = 'S')[:-1])
+#        ax.set_xticklabels(self.columns)
         ax.set_title('Daily traffic on %s' % _eachday[args[0]])
         fig.show()
 
-        
+#%%        
     def plot_weekmodel(self, *args):
         '''
         Plot regular wekkly model in matplotlib figure.
