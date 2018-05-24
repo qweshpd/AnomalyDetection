@@ -3,7 +3,7 @@
 
 import numpy as np
 import pandas as pd
-#import datetime
+from datetime import datetime, timedelta
 
 import matplotlib.pylab as plt
 plt.rcParams['figure.figsize'] = 15, 6
@@ -24,7 +24,7 @@ class SparkWeekly(object):
     holiday : list of string, YYYY-MM-DD
         Predefined holidays.
     '''     
-    def __init__(self, holiday = [], freq = 2, filt = None, sc = None):
+    def __init__(self, holiday = [], ignoday = [], freq = 2, filt = None, sc = None):
         '''
         Initialize the model with holidays.
         
@@ -32,12 +32,14 @@ class SparkWeekly(object):
         ----------       
         holiday: list of string, YYYY-MM-DD
             Predefined holidays.
-        sc: pyspark.SparkContext
-            The SparkContext, required.
+        ignoday: list of string, YYYY-MM-DD
+            Days not considered into model.
         freq: int
             The expected data frequency.
         filt: function
             The function of how data model will be build.
+        sc: pyspark.SparkContext
+            The SparkContext, required.
         '''
         assert sc != None, "Missing SparkContext"
         
@@ -47,6 +49,7 @@ class SparkWeekly(object):
         self.filt = filt
         self.sc = sc
         self.holiday = holiday
+        self.ignoday = ignoday
         self.freq = freq
         self.num = int(24/self.freq)
         self.columns = [('0' + str(int(i)))[-2:] for i in np.linspace(0, 24, self.num + 1)[:-1]]
@@ -68,13 +71,14 @@ class SparkWeekly(object):
         '''
         sc = self.sc
         holiday = self.holiday
+        ignoday = self.ignoday
         data = self.data
         freq = self.freq
-        tmp_data = np.vstack((list(data.index), list(data))).T
+        tmp_data = sc.parallelize(np.vstack((list(data.index), list(data))).T)\
+                     .filter(lambda x: x[0].strftime('%Y-%m-%d') not in ignoday)
         
-#        hol_day = self.sc.parallelize(tmp_data).filter(lambda x: x[0].strftime('%Y-%m-%d') in self.holiday)
-        reg_day = sc.parallelize(tmp_data).filter(lambda x: x[0].strftime('%Y-%m-%d') not in holiday)        
-        off_day = sc.parallelize(tmp_data).filter(lambda x: (x[0].strftime('%Y-%m-%d') in holiday) or (x[0].weekday() > 4))
+        reg_day = tmp_data.filter(lambda x: x[0].strftime('%Y-%m-%d') not in holiday)        
+        off_day = tmp_data.filter(lambda x: (x[0].strftime('%Y-%m-%d') in holiday) or (x[0].weekday() > 4))
 
         reg_day_data = reg_day\
                   .map(lambda x:(str(x[0].weekday()) + ('0' + str(int(x[0].hour/freq)))[-2:], [x[1], x[0]]))\
@@ -131,8 +135,7 @@ class SparkWeekly(object):
                                columns=model.keys().collect(), 
                                index=_index)
         modeldf.columns = self.columns
-        return modeldf
-#%%%       
+        return modeldf     
             
     def plot_daily(self, *args):
         '''
@@ -168,8 +171,7 @@ class SparkWeekly(object):
 #        ax.set_xticklabels(self.columns)
         ax.set_title('Daily traffic on %s' % _eachday[args[0]])
         fig.show()
-
-#%%        
+       
     def plot_weekmodel(self, *args):
         '''
         Plot regular wekkly model in matplotlib figure.
@@ -193,22 +195,21 @@ class SparkWeekly(object):
                 for time in self.columns:
                     xtick.append(day[:3] + time)
                     
-        above = daymodel.loc['Ave'] + _ntimes * daymodel.loc['Std']
-        below = daymodel.loc['Ave'] - _ntimes * daymodel.loc['Std']
-        below[np.where(below < 0)[0]] = 0
+        above = daymodel.loc['Max']
+        below = daymodel.loc['Min']
             
         plt.figure()
-        plt.plot(np.arange(daymodel.shape[1]), daymodel.loc['Ave'], 
+        plt.plot(np.arange(self.num), daymodel.loc['Ave'], 
                  '-', color = '#0072B2', label = 'Average')
-        plt.fill_between(np.arange(daymodel.shape[1]), above, below, 
+        plt.fill_between(np.arange(self.num), above, below, 
                          color = '#87CEEB', label = 'Confidence Inerval')
         plt.legend().draggable()
-        plt.xticks(np.arange(daymodel.shape[1]), xtick, rotation = 40)
-        plt.title(title + ' data model with confidence interval.')
+        plt.xticks(np.arange(self.num), xtick, rotation = 40)
+        plt.title(title + ' data model with confidence interval.', fontsize = 20)
         plt.grid()
         plt.show()
         
-        
+#%%        
     def _generate_model(self, sdate, edate, holiday = True):
         '''
         Generate data model within date range with freqency.   
