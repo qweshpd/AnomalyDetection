@@ -25,7 +25,7 @@ class SparkWeekly(object):
     holiday : list of string, YYYY-MM-DD
         Predefined holidays.
     '''     
-    def __init__(self, holiday = [], freq = 2, sc = None):
+    def __init__(self, holiday = [], freq = 2, filt = None, sc = None):
         '''
         Initialize the model with holidays.
         
@@ -38,6 +38,7 @@ class SparkWeekly(object):
         '''
         assert sc != None, "Missing SparkContext"
         
+        self.filt = filt
         self.sc = sc
         self.holiday = holiday
         self.freq = freq
@@ -79,7 +80,8 @@ class SparkWeekly(object):
         
         self.reg_day_data = reg_day_data
         self.off_day_data = off_day_data
-                
+        
+        fil = self.filt
         tmp = pd.DataFrame([])
         col = []
         for i in np.arange(7):
@@ -88,15 +90,16 @@ class SparkWeekly(object):
                  .map(lambda x:(x[0][1:], x[1]))
             self.dailydata[_eachday[i]] = tmp_data.collectAsMap()                 
                  
-#            model = tmp_data.map(stat).collectAsMap()
-#            modeldf = pd.DataFrame(model, columns=self.columns, index=_index)
-#            self.dailymodel[_eachday[i]] = modeldf
-#            col.append([_eachday[i][:3] + k for k in self.columns])
-#            tmp = tmp.T.append(modeldf.T).T
+#            model = tmp_data.map(lambda x: (x[0], [x[1][:,0].mean(), x[1][:,0].max(), x[1][:,0].min(), x[1][:,0].std()]))\
+            model = tmp_data.map(fil).collectAsMap()
+            modeldf = pd.DataFrame(model, columns=self.columns, index=_index)
+            self.dailymodel[_eachday[i]] = modeldf
+            col.append([_eachday[i][:3] + k for k in self.columns])
+            tmp = tmp.T.append(modeldf.T).T
 
         self.dailydata['Offday'] = off_day_data.map(lambda x:(x[0][1:], x[1])).collectAsMap()
   
-        tmp.columns = col
+#        tmp.column= col
         self.dailydata['Week'] = tmp
         
         return reg_day_data, off_day_data
