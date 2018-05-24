@@ -24,7 +24,7 @@ class SparkWeekly(object):
     holiday : list of string, YYYY-MM-DD
         Predefined holidays.
     '''     
-    def __init__(self, holiday = [], ignoday = [], freq = 2, filt = None, sc = None):
+    def __init__(self, holiday = [], ignoday = [], freq = 2, filt = None, sc = None, merge = False):
         '''
         Initialize the model with holidays.
         
@@ -40,6 +40,8 @@ class SparkWeekly(object):
             The function of how data model will be build.
         sc: pyspark.SparkContext
             The SparkContext, required.
+        merge: boolean, default = False
+            True if want to build all weekday into one model.
         '''
         assert sc != None, "Missing SparkContext"
         
@@ -48,6 +50,7 @@ class SparkWeekly(object):
                               np.array(x).mean() - 3 * np.array(x).std()]
         self.filt = filt
         self.sc = sc
+        self.merge = merge
         self.holiday = holiday
         self.ignoday = ignoday
         self.freq = freq
@@ -66,8 +69,8 @@ class SparkWeekly(object):
         
         Parameters
         ----------       
-        data : pandas.Series data with datetime-like index
-            Data to be analyzed.
+        merge: boolean, default = False
+            True if want to build all weekday into one model.
         '''
         sc = self.sc
         holiday = self.holiday
@@ -77,50 +80,75 @@ class SparkWeekly(object):
         tmp_data = sc.parallelize(np.vstack((list(data.index), list(data))).T)\
                      .filter(lambda x: x[0].strftime('%Y-%m-%d') not in ignoday)
         
-        reg_day = tmp_data.filter(lambda x: x[0].strftime('%Y-%m-%d') not in holiday)        
+        # Build model for weekday
+        reg_day = tmp_data.filter(lambda x: x[0].strftime('%Y-%m-%d') not in holiday)       
+        if self.merge is False:
+            reg_day_data = reg_day\
+                      .map(lambda x:(str(x[0].weekday()) + ('0' + str(int(x[0].hour/freq)))[-2:], [x[1], x[0]]))\
+                      .reduceByKey(lambda x,y:np.vstack((np.array(x),np.array(y)))).sortByKey()
+            
+            for i in np.arange(7):        
+                tmp_data = reg_day_data.filter(lambda x: x[0].startswith(str(i)))\
+                     .map(lambda x:(x[0][1:], x[1]))
+                self.dailydata[_eachday[i]] = tmp_data.collectAsMap()
+        else:
+            reg_day_data = reg_day.filter(lambda x: x[0].weekday() < 5)\
+                      .map(lambda x:(('0' + str(int(x[0].hour/freq)))[-2:], [x[1], x[0]]))\
+                      .reduceByKey(lambda x,y:np.vstack((np.array(x),np.array(y)))).sortByKey()
+            self.dailydata['Busday'] = tmp_data.collectAsMap()
+    
+        # Build model for offday 
         off_day = tmp_data.filter(lambda x: (x[0].strftime('%Y-%m-%d') in holiday) or (x[0].weekday() > 4))
-
-        reg_day_data = reg_day\
-                  .map(lambda x:(str(x[0].weekday()) + ('0' + str(int(x[0].hour/freq)))[-2:], [x[1], x[0]]))\
-                  .reduceByKey(lambda x,y:np.vstack((np.array(x),np.array(y)))).sortByKey()
-                  
         off_day_data = off_day\
                   .map(lambda x:(('0' + str(int(x[0].hour/freq)))[-2:], [x[1], x[0]]))\
                   .reduceByKey(lambda x,y:np.vstack((np.array(x),np.array(y)))).sortByKey()
         
-        for i in np.arange(7):        
-            tmp_data = reg_day_data.filter(lambda x: x[0].startswith(str(i)))\
-                 .map(lambda x:(x[0][1:], x[1]))
-            self.dailydata[_eachday[i]] = tmp_data.collectAsMap()                 
-
-        self.dailydata['Offday'] = off_day_data.map(lambda x:(x[0][1:], x[1])).collectAsMap()
+        self.dailydata['Offday'] = off_day_data.map(lambda x:(x[0], x[1])).collectAsMap()
   
         return reg_day_data, off_day_data
         
-    def fit(self, data, filt = None):
+    def fit(self, data):
+        '''
+        Decompose data into everyday.
+        
+        Parameters
+        ----------       
 
+        '''
         filt = self.filt
-            
         self.data = data
         reg_day_data, off_day_data = self._extract_day()
         
-        bus = pd.DataFrame([])
+        wk = pd.DataFrame([])
         col = []
-        for i in np.arange(7):
-            rdd = reg_day_data.filter(lambda x:x[0].startswith(str(i)))\
-                                      .map(lambda x:(x[0][1:], x[1][:, 0]))
-            tmpmodel = self._build_model(rdd, filt)                         
-            col.append([_eachday[i][:3] + k for k in self.columns])
-            bus = bus.T.append(tmpmodel.T).T
-            self.dailymodel[_eachday[i]] = tmpmodel
-        bus.columns = np.hstack(col)
         
-        offrdd = off_day_data.map(lambda x:(x[0][1:], x[1][:, 0]))
-        
-        self.dailymodel['Busday'] = bus
-        self.dailymodel['Offday'] = self._build_model(offrdd, filt) 
-
-        
+        if self.merge is False:
+            for i in np.arange(7):
+                rdd = reg_day_data.filter(lambda x:x[0].startswith(str(i)))\
+                                          .map(lambda x:(x[0][1:], x[1][:, 0]))
+                tmpmodel = self._build_model(rdd, filt)                         
+                col.append([_eachday[i][:3] + k for k in self.columns])
+                wk = wk.T.append(tmpmodel.T).T
+                self.dailymodel[_eachday[i]] = tmpmodel
+                offrdd = off_day_data.map(lambda x:(x[0], x[1][:, 0]))        
+                self.dailymodel['Offday'] = self._build_model(offrdd, filt) 
+        else:
+            busrdd = reg_day_data.map(lambda x: (x[0], x[1][:, 0]))
+            tmpmodel = self._build_model(busrdd, filt)
+            for i in np.arange(5):
+                self.dailymodel[_eachday[i]] = self._build_model(busrdd, filt)
+                col.append([_eachday[i][:3] + k for k in self.columns])
+                wk = wk.T.append(tmpmodel.T).T
+            offrdd = off_day_data.map(lambda x:(x[0], x[1][:, 0]))        
+            offmodel = self._build_model(offrdd, filt)
+            self.dailymodel['Offday'] = offmodel
+            for i in [5, 6]:
+                self.dailymodel[_eachday[i]] = offmodel
+                col.append([_eachday[i][:3] + k for k in self.columns])
+                wk = wk.T.append(tmpmodel.T).T
+        wk.columns = np.hstack(col)
+        self.dailymodel['week'] = wk
+            
     def _build_model(self, RDDdata, filt):
         '''
         Build daily model based on data.  
@@ -209,7 +237,6 @@ class SparkWeekly(object):
         plt.grid()
         plt.show()
         
-#%%        
     def _generate_model(self, sdate, edate, holiday = True):
         '''
         Generate data model within date range with freqency.   
@@ -259,8 +286,8 @@ class SparkWeekly(object):
                                         
         return pd.DataFrame(model, columns = index, index = _index)        
         
-        
-    def detect(self, data = None, holiday = False, where = 'both', show = True):
+#%%        
+    def detect(self, data = None, holiday = True, where = 'both', show = True):
         '''
         Fit trained model to data, and get anomaly data point.   
         
@@ -279,44 +306,43 @@ class SparkWeekly(object):
         anomalies : numpy.array of strings
             Anomalies date and time.
         '''
+        
+        def _above(data):
+            value = data[1]
+            time = data[0]
+            thre = self.dailymodel[_eachday[time.weekday]]\
+                       .loc[['Max'], [('0' + str(int(time.hour/freq)))[-2:]]]
+            return value > thre
+        
+        def _below(data):
+            value = data[1]
+            time = data[0]
+            thre = self.dailymodel[_eachday[time.weekday]]\
+                       .loc[['Min'], [('0' + str(int(time.hour/freq)))[-2:]]]
+            return value < thre
+
+        def _normal(data):                       
+            return (not _below(data)) and (not _above(data))
+        
+        filtdict = {'above': [[_normal, _above], ['normal', 'above']],
+                    'below': [[_normal, _below], ['normal', 'below']],
+                    'both' : [[_normal, _above, _below], ['normal', 'above', 'below']]}
+        
+        
         if data is None:
             data = self.data
-        sdate = data.index[0].date()
-        edate = data.index[-1].date()
-        model = self._generate_model(sdate, edate, holiday = holiday)
-        
-        below = model.loc['Ave'] - _ntimes * model.loc['Std']
-        above = model.loc['Ave'] + _ntimes * model.loc['Std']
-        below[np.where(below < 0)[0]] = 0
-        
-        tsdata = np.array(data)
-        indabove = np.where(tsdata > above)[0]
-        indbelow = np.where(tsdata < below)[0]
-        
-        printext = []
-        
-        if where == 'both':
-            printext.append('Above Normal Range:\n')
-            if not len(indabove):
-                printext.append('None.\n')
-            else:
-                for i in indabove:
-                    printext.append(data.index[i].strftime('%Y-%m-%d %H:%m:%S'))
-            printext.append('\nBelow Normal Range:\n')
-            if not len(indbelow):
-                printext.append('None.\n')
-            else:
-                for i in indbelow:
-                    printext.append(data.index[i].strftime('%Y-%m-%d %H:%m:%S'))
-        elif where == 'above':
-            for i in indabove:
-                printext.append(data.index[i].strftime('%Y-%m-%d %H:%m:%S'))
-        elif where == 'below':
-            for i in indbelow:
-                printext.append(data.index[i].strftime('%Y-%m-%d %H:%m:%S'))
-            
-        for i in printext:
-            print(i)
+        sc = self.sc
+        freq = self.freq
+        raw_data = sc.parallelize(np.vstack((list(data.index), list(data))).T)
+        detection = filtdict[where]
+        result = {}
+        for i in np.arange(len(detection[0])):
+            tmp_result = np.vstack(raw_data.filter(detection[0][i]).collect())
+            result[detection[1][i]] = pd.Series(tmp_result[:, 1], index = tmp_result[:, 0])
+            if i > 0:
+                print(detection[1][i] + ' Normal Range:\n')
+                for date in tmp_result[:, 0]:
+                    print(date.strftime('%Y-%m-%d %H:%m:%S'))
             
         if show:
             def _onpick(event):
