@@ -4,7 +4,6 @@
 import numpy as np
 import pandas as pd
 #import datetime
-from tpk import stat
 
 import matplotlib.pylab as plt
 plt.rcParams['figure.figsize'] = 15, 6
@@ -12,7 +11,7 @@ plt.rcParams['figure.figsize'] = 15, 6
 _eachday = ["Monday", "Tuesday", "Wednesday", "Thursday", 
             "Friday", "Saturday","Sunday", "Offday"]
 _ntimes = 3
-_index = ['Ave', 'Max', 'Min', 'Std']
+_index = ['Ave', 'Max', 'Min']
 
 class SparkWeekly(object):
     '''
@@ -35,9 +34,16 @@ class SparkWeekly(object):
             Predefined holidays.
         sc: pyspark.SparkContext
             The SparkContext, required.
+        freq: int
+            The expected data frequency.
+        filt: function
+            The function of how data model will be build.
         '''
         assert sc != None, "Missing SparkContext"
         
+        if filt is None:
+            filt = lambda x: [np.array(x).mean(), np.array(x).mean() + 3 * np.array(x).std(),\
+                              np.array(x).mean() - 3 * np.array(x).std()]
         self.filt = filt
         self.sc = sc
         self.holiday = holiday
@@ -78,40 +84,40 @@ class SparkWeekly(object):
                   .map(lambda x:(('0' + str(int(x[0].hour/freq)))[-2:], [x[1], x[0]]))\
                   .reduceByKey(lambda x,y:np.vstack((np.array(x),np.array(y)))).sortByKey()
         
-        self.reg_day_data = reg_day_data
-        self.off_day_data = off_day_data
-        
-        fil = self.filt
-        tmp = pd.DataFrame([])
-        col = []
-        for i in np.arange(7):
-            
+        for i in np.arange(7):        
             tmp_data = reg_day_data.filter(lambda x: x[0].startswith(str(i)))\
                  .map(lambda x:(x[0][1:], x[1]))
             self.dailydata[_eachday[i]] = tmp_data.collectAsMap()                 
-                 
-#            model = tmp_data.map(lambda x: (x[0], [x[1][:,0].mean(), x[1][:,0].max(), x[1][:,0].min(), x[1][:,0].std()]))\
-            model = tmp_data.map(fil).collectAsMap()
-            modeldf = pd.DataFrame(model, columns=self.columns, index=_index)
-            self.dailymodel[_eachday[i]] = modeldf
-            col.append([_eachday[i][:3] + k for k in self.columns])
-            tmp = tmp.T.append(modeldf.T).T
 
         self.dailydata['Offday'] = off_day_data.map(lambda x:(x[0][1:], x[1])).collectAsMap()
   
-#        tmp.column= col
-        self.dailydata['Week'] = tmp
-        
         return reg_day_data, off_day_data
         
-    def fit(self, data):
-        print(stat(('0', np.zeros((2,2)))))
+    def fit(self, data, filt = None):
+
+        filt = self.filt
+            
         self.data = data
         reg_day_data, off_day_data = self._extract_day()
         
+        bus = pd.DataFrame([])
+        col = []
+        for i in np.arange(7):
+            rdd = reg_day_data.filter(lambda x:x[0].startswith(str(i)))\
+                                      .map(lambda x:(x[0][1:], x[1][:, 0]))
+            tmpmodel = self._build_model(rdd, filt)                         
+            col.append(_eachday[i][:3] + k for k in self.columns)
+            bus = bus.T.append(tmpmodel.T).T
+            self.dailymodel[_eachday[i]] = tmpmodel
+#        bus.columns = col
+        
+        offrdd = off_day_data.map(lambda x:(x[0][1:], x[1][:, 0]))
+        
+        self.dailymodel['Busday'] = bus
+        self.dailymodel['Offday'] = self._build_model(offrdd, filt) 
 
         
-    def _build_model(self, RDDdata):
+    def _build_model(self, RDDdata, filt):
         '''
         Build daily model based on data.  
                
@@ -121,8 +127,7 @@ class SparkWeekly(object):
             Day to build daily model.
         '''
         col = self.columns
-        model = RDDdata.map(lambda x: (x[0], x[1][:,0].mean())).collectAsMap()
-        model = RDDdata.map(stat).collectAsMap()
+        model = RDDdata.map(lambda x: (x[0], filt(x[1]))).collectAsMap()
         modeldf = pd.DataFrame(model, columns=col, index=_index)
         
         return modeldf
