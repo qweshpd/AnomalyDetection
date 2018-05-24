@@ -303,88 +303,82 @@ class SparkWeekly(object):
             
         Returns
         ----------
-        anomalies : numpy.array of strings
-            Anomalies date and time.
+        abv : 1D array-like
+            Indices of anomalies above.
+        bel : 1D array-like
+            Indices of anomalies below.
+        nor: 1D array-like
+            Indices of normal data point.
         '''
-        
-        def _above(data):
+        def _mapfunc(data):
             value = data[1]
             time = data[0]
-            thre = self.dailymodel[_eachday[time.weekday]]\
+            mmax = self.dailymodel[_eachday[time.weekday]]\
                        .loc[['Max'], [('0' + str(int(time.hour/freq)))[-2:]]]
-            return value > thre
-        
-        def _below(data):
-            value = data[1]
-            time = data[0]
-            thre = self.dailymodel[_eachday[time.weekday]]\
+            mmin = self.dailymodel[_eachday[time.weekday]]\
                        .loc[['Min'], [('0' + str(int(time.hour/freq)))[-2:]]]
-            return value < thre
-
-        def _normal(data):                       
-            return (not _below(data)) and (not _above(data))
-        
-        filtdict = {'above': [[_normal, _above], ['normal', 'above']],
-                    'below': [[_normal, _below], ['normal', 'below']],
-                    'both' : [[_normal, _above, _below], ['normal', 'above', 'below']]}
-        
-        
+            if value > mmax:
+                color = 'r'
+            elif value < mmin:
+                color = 'pink'
+            else:
+                color = 'k'
+                
+            return (time, value, color)
+            
+            
         if data is None:
             data = self.data
         sc = self.sc
         freq = self.freq
-        raw_data = sc.parallelize(np.vstack((list(data.index), list(data))).T)
-        detection = filtdict[where]
-        result = {}
-        for i in np.arange(len(detection[0])):
-            tmp_result = np.vstack(raw_data.filter(detection[0][i]).collect())
-            result[detection[1][i]] = pd.Series(tmp_result[:, 1], index = tmp_result[:, 0])
-            if i > 0:
-                print(detection[1][i] + ' Normal Range:\n')
-                for date in tmp_result[:, 0]:
-                    print(date.strftime('%Y-%m-%d %H:%m:%S'))
+        sdate = data.index[0].date()
+        edate = data.index[-1].date()
+        model = self._generate_model(sdate, edate, holiday = holiday)
+        res = sc.parallelize(np.vstack((list(data.index), list(data))).T)\
+                .map(_mapfunc).collectAsMap()
+        print(res.shape)
+        result = np.vstack(res)
+        
+        abv = result[:, 3] == 'r'
+        bel = result[:, 3] == 'pink'
+        nor = result[:, 3] == 'k'
+
+        filtdict = {'above': ['r'], 'below': ['pink']}
+
+        if where == 'both':
+            where = ['above', 'below']
+        for col in list[where]:
+            print(col + ' Normal Range:\n')
+            pp = result[result[:, 3] == filtdict[col]]
+            for date in pp.loc['time']:
+                print(date.strftime('%Y-%m-%d %H:%m:%S'))
             
         if show:
             def _onpick(event):
-                ind = event.ind
+                ind = np.array(event.ind)[0]
                 print('\nTime: %s, Rate: %.3f' %
-                      (data.index[ind].strftime('%Y-%m-%d %H:%m:%S')[0],
-                      tsdata[ind]))
-                
-            ind1 = np.where((tsdata >= below) & (tsdata <= above))
-            if holiday is False:
-                title = 'Data model without holidays.'
-            else:
-                title = 'Data model with customized holidays.'
+                      (result[ind, 0].strftime('%Y-%m-%d %H:%m:%S'), result[ind, 1]))
                 
             fig, ax = plt.subplots()
             ax.plot(model.columns, model.loc['Ave'], '-',
                       color = '#0072B2', label = 'Average')
-            ax.fill_between(model.columns, above, below, 
+            ax.fill_between(model.columns, model.loc['Max'], model.loc['Min'], 
                             color = '#87CEEB', label = 'Confidence Inerval')
             
-            ax.scatter(model.columns[ind1], tsdata[ind1], c = 'k', 
-                        label = 'Normal', picker = True)
+            for k in np.arange(3):
+                m = result[[abv, bel, nor][k]]
+                l = ['Above', 'Below', 'Normal']
+                col = ['r', 'pink', 'k']
+                ax.scatter(m[0, 0], m[0, 1], color = col[k], label = l[k],
+                           picker = True)
             
-            if where == 'both':
-                ax.scatter(model.columns[indabove], tsdata[indabove],  c = 'r', 
-                            label = 'Above Normal', picker = True)
-                ax.scatter(model.columns[indbelow], tsdata[indbelow],  c = 'pink', 
-                            label = 'Below Normal', picker = True)
-            elif where == 'above':
-                ax.scatter(model.columns[indabove], tsdata[indabove],  c = 'r', 
-                            label = 'Anormal', picker = True)
-            elif where == 'below':
-                ax.scatter(model.columns[indbelow], tsdata[indbelow],  c = 'r', 
-                            label = 'Anormal', picker = True)
-            
-            ax.set_title(title)
+            ax.set_title('Anomaly Detection with built-in model.')
             ax.legend().draggable()       
             fig.canvas.mpl_connect('pick_event', _onpick)             
             ax.grid()
             plt.show()
         
-        return indabove, indbelow
+        return [abv, bel, nor]
         
         
         
