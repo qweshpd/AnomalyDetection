@@ -106,10 +106,10 @@ class SparkWeekly(object):
             rdd = reg_day_data.filter(lambda x:x[0].startswith(str(i)))\
                                       .map(lambda x:(x[0][1:], x[1][:, 0]))
             tmpmodel = self._build_model(rdd, filt)                         
-            col.append(_eachday[i][:3] + k for k in self.columns)
+            col.append([_eachday[i][:3] + k for k in self.columns])
             bus = bus.T.append(tmpmodel.T).T
             self.dailymodel[_eachday[i]] = tmpmodel
-#        bus.columns = col
+        bus.columns = np.hstack(col)
         
         offrdd = off_day_data.map(lambda x:(x[0][1:], x[1][:, 0]))
         
@@ -126,12 +126,12 @@ class SparkWeekly(object):
         RDDday : spark.RDD object
             Day to build daily model.
         '''
-        col = self.columns
-        model = RDDdata.map(lambda x: (x[0], filt(x[1]))).collectAsMap()
-        modeldf = pd.DataFrame(model, columns=col, index=_index)
-        
+        model = RDDdata.map(lambda x: (x[0], filt(x[1])))
+        modeldf = pd.DataFrame(model.collectAsMap(), 
+                               columns=model.keys().collect(), 
+                               index=_index)
+        modeldf.columns = self.columns
         return modeldf
-        
 #%%%       
             
     def plot_daily(self, *args):
