@@ -310,13 +310,14 @@ class SparkWeekly(object):
         nor: 1D array-like
             Indices of normal data point.
         '''
+        mode = self.dailymodel
         def _mapfunc(data):
             value = data[1]
             time = data[0]
-            mmax = self.dailymodel[_eachday[time.weekday]]\
-                       .loc[['Max'], [('0' + str(int(time.hour/freq)))[-2:]]]
-            mmin = self.dailymodel[_eachday[time.weekday]]\
-                       .loc[['Min'], [('0' + str(int(time.hour/freq)))[-2:]]]
+            mmax = np.array(mode[_eachday[time.weekday()]]\
+                       .loc[['Max'], [('0' + str(int(time.hour/freq)))[-2:]]])[0][0]
+            mmin = np.array(mode[_eachday[time.weekday()]]\
+                       .loc[['Min'], [('0' + str(int(time.hour/freq)))[-2:]]])[0][0]
             if value > mmax:
                 color = 'r'
             elif value < mmin:
@@ -335,22 +336,21 @@ class SparkWeekly(object):
         edate = data.index[-1].date()
         model = self._generate_model(sdate, edate, holiday = holiday)
         res = sc.parallelize(np.vstack((list(data.index), list(data))).T)\
-                .map(_mapfunc).collectAsMap()
-        print(res.shape)
-        result = np.vstack(res)
+                .map(lambda x:_mapfunc(x))
+        result = np.vstack(res.collect())
         
-        abv = result[:, 3] == 'r'
-        bel = result[:, 3] == 'pink'
-        nor = result[:, 3] == 'k'
+        abv = np.where(result[:, 2] == 'r')
+        bel = np.where(result[:, 2] == 'pink')
+        nor = np.where(result[:, 2] == 'k')
 
         filtdict = {'above': ['r'], 'below': ['pink']}
 
         if where == 'both':
             where = ['above', 'below']
-        for col in list[where]:
+        for col in list(where):
             print(col + ' Normal Range:\n')
-            pp = result[result[:, 3] == filtdict[col]]
-            for date in pp.loc['time']:
+            pp = result[result[:, 2] == filtdict[col]]
+            for date in pp[:, 0]:
                 print(date.strftime('%Y-%m-%d %H:%m:%S'))
             
         if show:
@@ -369,7 +369,7 @@ class SparkWeekly(object):
                 m = result[[abv, bel, nor][k]]
                 l = ['Above', 'Below', 'Normal']
                 col = ['r', 'pink', 'k']
-                ax.scatter(m[0, 0], m[0, 1], color = col[k], label = l[k],
+                ax.scatter(m[:, 0], m[:, 1], color = col[k], label = l[k],
                            picker = True)
             
             ax.set_title('Anomaly Detection with built-in model.')
