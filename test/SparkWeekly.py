@@ -95,7 +95,7 @@ class SparkWeekly(object):
             reg_day_data = reg_day.filter(lambda x: x[0].weekday() < 5)\
                       .map(lambda x:(('0' + str(int(x[0].hour/freq)))[-2:], [x[1], x[0]]))\
                       .reduceByKey(lambda x,y:np.vstack((np.array(x),np.array(y)))).sortByKey()
-            self.dailydata['Busday'] = reg_day_data .collectAsMap()
+            self.dailydata['Busday'] = reg_day_data.collectAsMap()
     
         # Build model for offday 
         off_day = tmp_data.filter(lambda x: (x[0].strftime('%Y-%m-%d') in holiday) or (x[0].weekday() > 4))
@@ -119,6 +119,7 @@ class SparkWeekly(object):
         self.data = data
         reg_day_data, off_day_data = self._extract_day()
         
+        self.reg_day_data = reg_day_data
         wk = pd.DataFrame([])
         col = []
         
@@ -145,7 +146,7 @@ class SparkWeekly(object):
             for i in [5, 6]:
                 self.dailymodel[_eachday[i]] = offmodel
                 col.append([_eachday[i][:3] + k for k in self.columns])
-                wk = wk.T.append(tmpmodel.T).T
+                wk = wk.T.append(offmodel.T).T
         wk.columns = np.hstack(col)
         self.dailymodel['week'] = wk
             
@@ -174,13 +175,18 @@ class SparkWeekly(object):
         date : integer from 0 to 7
             Specific date.
         '''
-        
-        if args and (args[0] in np.arange(8)):
-            datadic = self.dailydata[_eachday[args[0]]]
+        if args:
+            datadic = self.dailydata[args[0]]
         else:
-            for i in np.arange(8):
-                self.plot_daily(i)
+            if self.merge:
+                namelist = ['Busday', 'Offday']
+            else:
+                namelist = _eachday
+     
+            for day in namelist:
+                self.plot_daily(day)
             return
+
 
         data = np.array([[], [], []]).T
         for xtic in datadic:
@@ -197,7 +203,7 @@ class SparkWeekly(object):
         fig.canvas.mpl_connect('pick_event', _onpick)    
 #        ax.legend().draggable()
 #        ax.set_xticklabels(self.columns)
-        ax.set_title('Daily traffic on %s' % _eachday[args[0]])
+        ax.set_title('Daily traffic on %s' % args[0])
         fig.show()
        
     def plot_weekmodel(self, *args):
@@ -215,6 +221,8 @@ class SparkWeekly(object):
                 daymodel = self.dailymodel[args[0]]
                 title = args[0]
                 xtick = self.columns
+            else:
+                raise ValueError('Wrong parameter!')
         else:
             daymodel = self.dailymodel['week']
             title = 'Weekly'
@@ -227,12 +235,12 @@ class SparkWeekly(object):
         below = daymodel.loc['Min']
             
         plt.figure()
-        plt.plot(np.arange(self.num), daymodel.loc['Ave'], 
+        plt.plot(np.arange(daymodel.shape[1]), daymodel.loc['Ave'], 
                  '-', color = '#0072B2', label = 'Average')
-        plt.fill_between(np.arange(self.num), above, below, 
+        plt.fill_between(np.arange(daymodel.shape[1]), above, below, 
                          color = '#87CEEB', label = 'Confidence Inerval')
         plt.legend().draggable()
-        plt.xticks(np.arange(self.num), xtick, rotation = 40)
+        plt.xticks(np.arange(daymodel.shape[1]), xtick, rotation = 40)
         plt.title(title + ' data model with confidence interval.', fontsize = 20)
         plt.grid()
         plt.show()
