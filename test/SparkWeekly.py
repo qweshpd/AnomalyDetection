@@ -88,14 +88,14 @@ class SparkWeekly(object):
                       .reduceByKey(lambda x,y:np.vstack((np.array(x),np.array(y)))).sortByKey()
             
             for i in np.arange(7):        
-                tmp_data = reg_day_data.filter(lambda x: x[0].startswith(str(i)))\
+                day_data = reg_day_data.filter(lambda x: x[0].startswith(str(i)))\
                      .map(lambda x:(x[0][1:], x[1]))
-                self.dailydata[_eachday[i]] = tmp_data.collectAsMap()
+                self.dailydata[_eachday[i]] = day_data.collectAsMap()
         else:
             reg_day_data = reg_day.filter(lambda x: x[0].weekday() < 5)\
                       .map(lambda x:(('0' + str(int(x[0].hour/freq)))[-2:], [x[1], x[0]]))\
                       .reduceByKey(lambda x,y:np.vstack((np.array(x),np.array(y)))).sortByKey()
-            self.dailydata['Busday'] = tmp_data.collectAsMap()
+            self.dailydata['Busday'] = reg_day_data .collectAsMap()
     
         # Build model for offday 
         off_day = tmp_data.filter(lambda x: (x[0].strftime('%Y-%m-%d') in holiday) or (x[0].weekday() > 4))
