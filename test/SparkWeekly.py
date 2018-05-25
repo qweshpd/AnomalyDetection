@@ -9,8 +9,7 @@ import matplotlib.pylab as plt
 plt.rcParams['figure.figsize'] = 15, 6
 
 _eachday = ["Monday", "Tuesday", "Wednesday", "Thursday", 
-            "Friday", "Saturday","Sunday", "Offday"]
-_ntimes = 3
+            "Friday", "Saturday","Sunday", "Offday", "Busday"]
 _index = ['Ave', 'Max', 'Min']
 
 class SparkWeekly(object):
@@ -181,12 +180,11 @@ class SparkWeekly(object):
             if self.merge:
                 namelist = ['Busday', 'Offday']
             else:
-                namelist = _eachday
+                namelist = _eachday[:7]
      
             for day in namelist:
                 self.plot_daily(day)
             return
-
 
         data = np.array([[], [], []]).T
         for xtic in datadic:
@@ -227,7 +225,7 @@ class SparkWeekly(object):
             daymodel = self.dailymodel['week']
             title = 'Weekly'
             xtick = []
-            for day in _eachday:
+            for day in _eachday[:7]:
                 for time in self.columns:
                     xtick.append(day[:3] + time)
                     
@@ -255,7 +253,7 @@ class SparkWeekly(object):
             Left bound for generating dates
         edate : string or datetime-like
             Right bound for generating dates
-        holiday ： boolean, or list of holidays' date, default True
+        holiday : boolean, or list of holidays' date, default True
             
         Returns
         ----------
@@ -295,7 +293,7 @@ class SparkWeekly(object):
         return pd.DataFrame(model, columns = index, index = _index)        
         
 #%%        
-    def detect(self, data = None, holiday = True, where = 'both', show = True):
+    def detect(self, data = None, holiday = True, show = True):
         '''
         Fit trained model to data, and get anomaly data point.   
         
@@ -305,7 +303,6 @@ class SparkWeekly(object):
             Data to test.
         hol: boolean, default = False
             If True, take holiday effect into consideration.
-        where : string, ['above', 'below', 'both']
         show : boolean, default = True
             If True, plot daily data in matplotlib figure.
             
@@ -347,18 +344,15 @@ class SparkWeekly(object):
                 .map(lambda x:_mapfunc(x))
         result = np.vstack(res.collect())
         
-        abv = np.where(result[:, 2] == 'r')
-        bel = np.where(result[:, 2] == 'pink')
-        nor = np.where(result[:, 2] == 'k')
+        abv = np.where(result[:, 2] == 'r')[0]
+        bel = np.where(result[:, 2] == 'pink')[0]
+        nor = np.where(result[:, 2] == 'k')[0]
 
-        filtdict = {'above': ['r'], 'below': ['pink']}
+        filtdict = {'Above': abv, 'Below': bel}
 
-        if where == 'both':
-            where = ['above', 'below']
-        for col in list(where):
-            print(col + ' Normal Range:\n')
-            pp = result[result[:, 2] == filtdict[col]]
-            for date in pp[:, 0]:
+        for col in filtdict.keys():
+            print(col.join(['\n', ' Normal Range:\n']))
+            for date in result[filtdict[col]][:, 0]:
                 print(date.strftime('%Y-%m-%d %H:%m:%S'))
             
         if show:
