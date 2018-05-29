@@ -9,8 +9,7 @@ import matplotlib.pylab as plt
 plt.rcParams['figure.figsize'] = 15, 6
 
 _eachday = ["Monday", "Tuesday", "Wednesday", "Thursday", 
-            "Friday", "Saturday","Sunday", "Offday"]
-_ntimes = 3
+            "Friday", "Saturday","Sunday", "Offday", "Busday"]
 _index = ['Ave', 'Max', 'Min']
 
 class SparkWeekly(object):
@@ -88,14 +87,14 @@ class SparkWeekly(object):
                       .reduceByKey(lambda x,y:np.vstack((np.array(x),np.array(y)))).sortByKey()
             
             for i in np.arange(7):        
-                tmp_data = reg_day_data.filter(lambda x: x[0].startswith(str(i)))\
+                day_data = reg_day_data.filter(lambda x: x[0].startswith(str(i)))\
                      .map(lambda x:(x[0][1:], x[1]))
-                self.dailydata[_eachday[i]] = tmp_data.collectAsMap()
+                self.dailydata[_eachday[i]] = day_data.collectAsMap()
         else:
             reg_day_data = reg_day.filter(lambda x: x[0].weekday() < 5)\
                       .map(lambda x:(('0' + str(int(x[0].hour/freq)))[-2:], [x[1], x[0]]))\
                       .reduceByKey(lambda x,y:np.vstack((np.array(x),np.array(y)))).sortByKey()
-            self.dailydata['Busday'] = tmp_data.collectAsMap()
+            self.dailydata['Busday'] = reg_day_data.collectAsMap()
     
         # Build model for offday 
         off_day = tmp_data.filter(lambda x: (x[0].strftime('%Y-%m-%d') in holiday) or (x[0].weekday() > 4))
@@ -119,6 +118,7 @@ class SparkWeekly(object):
         self.data = data
         reg_day_data, off_day_data = self._extract_day()
         
+        self.reg_day_data = reg_day_data
         wk = pd.DataFrame([])
         col = []
         
@@ -145,7 +145,7 @@ class SparkWeekly(object):
             for i in [5, 6]:
                 self.dailymodel[_eachday[i]] = offmodel
                 col.append([_eachday[i][:3] + k for k in self.columns])
-                wk = wk.T.append(tmpmodel.T).T
+                wk = wk.T.append(offmodel.T).T
         wk.columns = np.hstack(col)
         self.dailymodel['week'] = wk
             
@@ -174,12 +174,16 @@ class SparkWeekly(object):
         date : integer from 0 to 7
             Specific date.
         '''
-        
-        if args and (args[0] in np.arange(8)):
-            datadic = self.dailydata[_eachday[args[0]]]
+        if args:
+            datadic = self.dailydata[args[0]]
         else:
-            for i in np.arange(8):
-                self.plot_daily(i)
+            if self.merge:
+                namelist = ['Busday', 'Offday']
+            else:
+                namelist = _eachday[:7]
+     
+            for day in namelist:
+                self.plot_daily(day)
             return
 
         data = np.array([[], [], []]).T
@@ -197,7 +201,7 @@ class SparkWeekly(object):
         fig.canvas.mpl_connect('pick_event', _onpick)    
 #        ax.legend().draggable()
 #        ax.set_xticklabels(self.columns)
-        ax.set_title('Daily traffic on %s' % _eachday[args[0]])
+        ax.set_title('Daily traffic on %s' % args[0])
         fig.show()
        
     def plot_weekmodel(self, *args):
@@ -215,11 +219,13 @@ class SparkWeekly(object):
                 daymodel = self.dailymodel[args[0]]
                 title = args[0]
                 xtick = self.columns
+            else:
+                raise ValueError('Wrong parameter!')
         else:
             daymodel = self.dailymodel['week']
             title = 'Weekly'
             xtick = []
-            for day in _eachday:
+            for day in _eachday[:7]:
                 for time in self.columns:
                     xtick.append(day[:3] + time)
                     
@@ -227,12 +233,12 @@ class SparkWeekly(object):
         below = daymodel.loc['Min']
             
         plt.figure()
-        plt.plot(np.arange(self.num), daymodel.loc['Ave'], 
+        plt.plot(np.arange(daymodel.shape[1]), daymodel.loc['Ave'], 
                  '-', color = '#0072B2', label = 'Average')
-        plt.fill_between(np.arange(self.num), above, below, 
+        plt.fill_between(np.arange(daymodel.shape[1]), above, below, 
                          color = '#87CEEB', label = 'Confidence Inerval')
         plt.legend().draggable()
-        plt.xticks(np.arange(self.num), xtick, rotation = 40)
+        plt.xticks(np.arange(daymodel.shape[1]), xtick, rotation = 40)
         plt.title(title + ' data model with confidence interval.', fontsize = 20)
         plt.grid()
         plt.show()
@@ -247,7 +253,7 @@ class SparkWeekly(object):
             Left bound for generating dates
         edate : string or datetime-like
             Right bound for generating dates
-        holiday ： boolean, or list of holidays' date, default True
+        holiday : boolean, or list of holidays' date, default True
             
         Returns
         ----------
@@ -287,7 +293,7 @@ class SparkWeekly(object):
         return pd.DataFrame(model, columns = index, index = _index)        
         
 #%%        
-    def detect(self, data = None, holiday = True, where = 'both', show = True):
+    def detect(self, data = None, holiday = True, show = True):
         '''
         Fit trained model to data, and get anomaly data point.   
         
@@ -297,7 +303,6 @@ class SparkWeekly(object):
             Data to test.
         hol: boolean, default = False
             If True, take holiday effect into consideration.
-        where : string, ['above', 'below', 'both']
         show : boolean, default = True
             If True, plot daily data in matplotlib figure.
             
@@ -339,18 +344,15 @@ class SparkWeekly(object):
                 .map(lambda x:_mapfunc(x))
         result = np.vstack(res.collect())
         
-        abv = np.where(result[:, 2] == 'r')
-        bel = np.where(result[:, 2] == 'pink')
-        nor = np.where(result[:, 2] == 'k')
+        abv = np.where(result[:, 2] == 'r')[0]
+        bel = np.where(result[:, 2] == 'pink')[0]
+        nor = np.where(result[:, 2] == 'k')[0]
 
-        filtdict = {'above': ['r'], 'below': ['pink']}
+        filtdict = {'Above': abv, 'Below': bel}
 
-        if where == 'both':
-            where = ['above', 'below']
-        for col in list(where):
-            print(col + ' Normal Range:\n')
-            pp = result[result[:, 2] == filtdict[col]]
-            for date in pp[:, 0]:
+        for col in filtdict.keys():
+            print(col.join(['\n', ' Normal Range:\n']))
+            for date in result[filtdict[col]][:, 0]:
                 print(date.strftime('%Y-%m-%d %H:%m:%S'))
             
         if show:
