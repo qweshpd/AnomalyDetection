@@ -346,6 +346,8 @@ class SimilarityAnalysis(PatternAnalysis):
                      data[0][sim[0]:sim[1]], 'r')
             plt.plot(np.linspace(sim[0], sim[1] - 1, sim[1] - sim[0]), 
                      data[1][sim[0]:sim[1]], 'r')
+        plt.title('Pearson correlation coefficient = %.6f' % scipy.stats.pearsonr(data[0], data[1])[0], 
+                  fontsize = 18)
         plt.legend()
         plt.show()
 #%% on off analysis
