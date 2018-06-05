@@ -291,8 +291,7 @@ class SparkWeekly(object):
                                     np.array(self.dailymodel['Offday'])
                                         
         return pd.DataFrame(model, columns = index, index = _index)        
-        
-#%%        
+       
     def detect(self, data = None, holiday = True, show = True):
         '''
         Fit trained model to data, and get anomaly data point.   
@@ -381,12 +380,4 @@ class SparkWeekly(object):
             plt.show()
         
         return [abv, bel, nor]
-        
-        
-        
-        
-        
-
-
-
 
