@@ -2,6 +2,7 @@
 
 import numpy as np
 import pandas as pd
+from scipy.stats import norm
 #from itertools import groupby
 
 _scale = 10
@@ -144,17 +145,13 @@ class NBEnum(object):
                 tmparray = self._seq_analy(encode_data[:, i])
                 tmpdict[features[i]] = tmparray
         
-        self.tmp = tmpdict
         model = self.model
         alert = []
         for onef in features:
             model_array = np.array(model[onef])
             test_array = tmpdict[onef][:, 2]
-            print(test_array)
-            print(model_array)
-            inds1 = np.where((test_array > model_array[2]))[0] 
-            inds2 = np.where((test_array < model_array[3]))[0]
-            inds = np.concatenate((inds1, inds2))
+            inds = np.where(np.logical_or(test_array > model_array[2],
+                                          test_array < model_array[3]))[0]
             
             if inds.any():
                 alert.append(tmpdict[onef][inds][:, :2])
@@ -167,5 +164,24 @@ class NBEnum(object):
                 print('matplotlib is not available.')
             else:
                 plt.figure()
+                for fi in features:
+                    entry = features.index(fi)
+                    print(fi)
+                    pltmodel = np.array(model[onef])
+                    test_array = tmpdict[onef][:, 2]
+                    
+                    plt.subplot(len(features), 1, entry + 1)
+                    
+                    base = np.arange(-10, max(test_array)+20, 1)
+                    normal = norm.pdf(base, pltmodel[0], pltmodel[1])
+                    anomalous = np.logical_or(base > pltmodel[2],
+                                              base < pltmodel[3])
+                    
+                    plt.hist(test_array, bins=base-0.5, 
+                             normed=True, zorder=1)
+                    plt.fill_between(base, normal, where=anomalous, 
+                                     color = [1,0,0,0.4], zorder = 2)
+                    plt.plot(base, normal, color = 'black', zorder = 3)
+                    plt.show()
 
         return np.sort(np.vstack(alert), axis = 0)
