@@ -141,16 +141,23 @@ class NBEnum(object):
             tmpdict = {}
             encode_data = self._encoding(data)
             for i in np.arange(self.encode.attrnum[0]):
-                tmparray = self._seq_analy(code_array[:, i])
+                tmparray = self._seq_analy(encode_data[:, i])
                 tmpdict[features[i]] = tmparray
         
-        
-        ind[self.features[i]] = ana_result[2]
-        if ana_result[1].any():
-            for i in ana_result[1]:
-                pl = tmparray[np.where(tmparray[:, 2] == i)[0]][0][:2]
-                alert.append(pl)
-       
+        self.tmp = tmpdict
+        model = self.model
+        alert = []
+        for onef in features:
+            model_array = np.array(model[onef])
+            test_array = tmpdict[onef][:, 2]
+            print(test_array)
+            print(model_array)
+            inds1 = np.where((test_array > model_array[2]))[0] 
+            inds2 = np.where((test_array < model_array[3]))[0]
+            inds = np.concatenate((inds1, inds2))
+            
+            if inds.any():
+                alert.append(tmpdict[onef][inds][:, :2])
         
         if show:
             try:
@@ -161,5 +168,4 @@ class NBEnum(object):
             else:
                 plt.figure()
 
-                
         return np.sort(np.vstack(alert), axis = 0)
