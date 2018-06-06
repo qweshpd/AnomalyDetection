@@ -1,7 +1,15 @@
 # -*- coding: utf-8 -*-
 
 import numpy as np
+import pandas as pd
 #from itertools import groupby
+
+_scale = 10
+_threshold = 60
+
+def _score(mu, sigma):
+    factor = np.sqrt(-np.log(1 - _threshold/100)/_scale)
+    return mu + sigma * factor, max(0, mu - sigma * factor)
 
 class auto_onehot(object):
     '''
@@ -60,10 +68,12 @@ class NBEnum(object):
         self.data = datalist
         self.features = list(set(datalist))
         self.encode = auto_onehot({self.name: self.features})
+        self.model = pd.DataFrame(columns=self.features, 
+                                  index = ['mu', 'sigma', 'tmax', 'tmin'])
         
-    def _encoding(self):
+    def _encoding(self, all_data):
+        '''Encode categorical integer features using one-hot.'''
         tranf = self.encode.transform
-        all_data = self.data
         code_array = np.vstack(list(map(lambda x:tranf([x]), all_data)))
         self.code_array = code_array
         
@@ -80,28 +90,76 @@ class NBEnum(object):
         value : int, 0 or 1
             Target value.
         '''
-        isvalue = np.concatenate(([0], np.equal(li, value), [0]))
+        isvalue = np.concatenate(([0], np.equal(code, value), [0]))
         inds = np.where(np.abs(np.diff(isvalue)) == 1)[0].reshape(-1, 2)
         last = inds[:, 1] - inds[:, 0]
         inds[:, 1] = inds[:, 1] - 1
-        return np.vstack((inds[:, 0], inds[:, 1], last))
+        return np.vstack((inds[:, 0], inds[:, 1], last)).T
     
     def _freq_anal(self, nlist):
-        num, freq = np.histogram(nlist, bins=np.arange(1, max(nlist)+2) - 0.5)
-        return np.vstack((num, (freq + 0.5)[:-1]))
+        '''Statistical matrix.'''
+        dmean = nlist.mean()
+        dstd = nlist.std()
+        factor = np.sqrt(-np.log(1 - _threshold/100)/_scale)
+        dmax = dmean + dstd * factor
+        dmin = max(0, dmean - dstd * factor)
+
+        return  dmean, dstd, dmax, dmin
     
     def modeling(self):
-        code_array = self._encoding()
-        ind = {}
+        '''
+        Build statistical model based on historical data.
+        '''
+        features = self.features
+        code_array = self._encoding(self.data)
+        self.feature_array = {}
         for i in np.arange(self.encode.attrnum[0]):
             tmparray = self._seq_analy(code_array[:, i])
-            ind[self.features[i]] = self._freq_anal(tmparray[:, 3])
+            self.feature_array[features[i]] = tmparray
+            self.model[features[i]] = self._freq_anal(tmparray[:, 2])
+            
+    def analyze(self, data = None, show = False):
+        '''
+        Analyze data based on model.
+        
+        Parameters
+        ----------
+        data : 
+            Data to be analyzed.
+        show : bool, optional (default = False)
+            Show plot (True) or not (False).
+        
+        Returns
+        -------
+        inds : 2D array-like [indi, indf]
+            Initial and final indices of data detected as anomaly.
+        '''
+        features = self.features
+        if data is None:
+            tmpdict = self.feature_array
+        else:
+            tmpdict = {}
+            encode_data = self._encoding(data)
+            for i in np.arange(self.encode.attrnum[0]):
+                tmparray = self._seq_analy(code_array[:, i])
+                tmpdict[features[i]] = tmparray
         
         
+        ind[self.features[i]] = ana_result[2]
+        if ana_result[1].any():
+            for i in ana_result[1]:
+                pl = tmparray[np.where(tmparray[:, 2] == i)[0]][0][:2]
+                alert.append(pl)
+       
         
-#%%
-        
-li = np.zeros((1, 1000))[0]
-li[np.random.randint(0, 1000, 500)] = 1
-bil = NBEnum('test', li)
-bil._encoding()
+        if show:
+            try:
+                import matplotlib.pylab as plt
+                plt.rcParams['figure.figsize'] = 15, 6
+            except ImportError:
+                print('matplotlib is not available.')
+            else:
+                plt.figure()
+
+                
+        return np.sort(np.vstack(alert), axis = 0)
