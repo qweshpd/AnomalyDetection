@@ -8,10 +8,6 @@ from scipy.stats import norm
 _scale = 10
 _threshold = 60
 
-def _score(mu, sigma):
-    factor = np.sqrt(-np.log(1 - _threshold/100)/_scale)
-    return mu + sigma * factor, max(0, mu - sigma * factor)
-
 class auto_onehot(object):
     '''
     Encode categorical integer features using one-hot.
