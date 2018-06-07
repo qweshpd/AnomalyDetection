@@ -5,7 +5,7 @@ import pandas as pd
 from scipy.stats import norm
 #from itertools import groupby
 
-_scale = 10
+_scale = 0.1
 _threshold = 60
 
 class auto_onehot(object):
@@ -60,19 +60,18 @@ class NBEnum(object):
     Automatical anomaly detection for enum-like variables.
     '''
     
-    def __init__(self, var_name, datalist):
+    def __init__(self, var_name, datalist, model = None):
         self.name = var_name
         self.data = datalist
         self.features = list(set(datalist))
         self.encode = auto_onehot({self.name: self.features})
-        self.model = pd.DataFrame(columns=self.features, 
-                                  index = ['mu', 'sigma', 'tmax', 'tmin'])
-        
+        if model == None:
+            self.code_array = self.modeling()
+
     def _encoding(self, all_data):
         '''Encode categorical integer features using one-hot.'''
         tranf = self.encode.transform
         code_array = np.vstack(list(map(lambda x:tranf([x]), all_data)))
-        self.code_array = code_array
         
         return code_array
     
@@ -107,14 +106,70 @@ class NBEnum(object):
         '''
         Build statistical model based on historical data.
         '''
+        self.model = pd.DataFrame(columns=self.features, 
+                          index = ['mu', 'sigma', 'tmax', 'tmin'])
         features = self.features
         code_array = self._encoding(self.data)
+        
         self.feature_array = {}
         for i in np.arange(self.encode.attrnum[0]):
             tmparray = self._seq_analy(code_array[:, i])
             self.feature_array[features[i]] = tmparray
             self.model[features[i]] = self._freq_anal(tmparray[:, 2])
             
+        return code_array
+    
+    def getscore(self, data = None):
+        '''
+        Analyze data based on model.
+        
+        Parameters
+        ----------
+        data : 
+            Data to be analyzed.
+        
+        Returns
+        -------
+        inds : 2D array-like [indi, indf]
+            Initial and final indices of data detected as anomaly.
+        '''
+        features = self.features
+        if data is None:
+            encode_data = self._encoding(self.data)
+            tmpdict = self.feature_array
+        else:
+            tmpdict = {}
+            encode_data = self._encoding(data)
+            for i in np.arange(self.encode.attrnum[0]):
+                tmparray = self._seq_analy(encode_data[:, i])
+                tmpdict[features[i]] = tmparray
+    
+        model = self.model
+        final_score = np.zeros((1, encode_data.shape[0]))
+        scoredict = {}
+        for onef in features:
+            model_array = np.array(model[onef])
+            mean = model_array[0]
+            std = model_array[1] if model_array[1] else 1
+            test_array = tmpdict[onef][:, 2]
+
+            score_array = 1 - np.exp(-_scale*((test_array-mean)/std)**2)
+            scoredict[onef] = np.vstack((tmpdict[onef][:, 0], 
+                                         tmpdict[onef][:, 1],
+                                         tmpdict[onef][:, 2],
+                                         score_array)).T
+
+            for i in np.arange(len(test_array)):
+                indif = tmpdict[onef][:, :2][i]
+                score = score_array[i]
+                final_score[0, indif[0]: indif[1] + 1] = score
+        
+        finalscore = pd.DataFrame(np.hstack((encode_data, final_score.T)),
+                                  columns=self.features+['score'])
+                                  
+        
+        return scoredict, finalscore
+    
     def analyze(self, data = None, show = False):
         '''
         Analyze data based on model.
@@ -140,7 +195,7 @@ class NBEnum(object):
             for i in np.arange(self.encode.attrnum[0]):
                 tmparray = self._seq_analy(encode_data[:, i])
                 tmpdict[features[i]] = tmparray
-        
+   
         model = self.model
         alert = []
         for onef in features:
@@ -179,9 +234,7 @@ class NBEnum(object):
                     plt.plot(base, normal, color = 'black', zorder = 3)
                     plt.title('Feature distribution of %s'%fi)
                     plt.show()
-        
-#        if np.shape(alert)[0]:
-#            alert = np.sort(np.vstack(alert), axis = 0)
+
             
         return alert
     
