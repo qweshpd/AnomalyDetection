@@ -53,7 +53,7 @@ class auto_onehot(object):
         return feature_array
 
 
-class NBEnum(object):
+class AnalyzeEnum(object):
     '''Automatical anomaly detection for enum-like variables.'''
     
     def __init__(self, var_name, datalist, model = None):
@@ -84,10 +84,7 @@ class NBEnum(object):
         '''
         isvalue = np.concatenate(([0], np.equal(code, value), [0]))
         inds = np.where(np.abs(np.diff(isvalue)) == 1)[0].reshape(-1, 2)
-        
-        #Note: Replace by last-time in the futrue version
         last = inds[:, 1] - inds[:, 0]
-        
         inds[:, 1] = inds[:, 1] - 1
         return np.vstack((inds[:, 0], inds[:, 1], last)).T
     
@@ -223,7 +220,6 @@ class NBEnum(object):
                     normal = norm.pdf(base, pltmodel[0], pltmodel[1])
                     anomalous = np.logical_or(base > pltmodel[2],
                                               base < pltmodel[3])
-                    print(anomalous)
                     plt.hist(test_array, bins=base-0.5, 
                              normed=True, zorder=1)
                     plt.fill_between(base, normal, where=anomalous, 
@@ -233,3 +229,36 @@ class NBEnum(object):
                     plt.show()
             
         return alert
+
+
+class NBEnum(AnalyzeEnum):
+    
+    def __init__(self, var_name, datalist, timelist, cachemodel):
+        self.timelist = timelist
+        super().__init__(var_name, datalist, model = cachemodel)
+    
+    def _seq_analy(self, code, value = 1):
+        '''Analysis sequential code.
+        
+        Parameters
+        ----------
+        code : array-like, contains only 0 or 1
+            Code data to be analyzed.
+        value : int, 0 or 1
+            Target value.
+        '''
+        isvalue = np.concatenate(([0], np.equal(code, value), [0]))
+        inds = np.where(np.abs(np.diff(isvalue)) == 1)[0].reshape(-1, 2)
+        inds[:, 1] = inds[:, 1] - 1
+        last = (self.timelist[inds[:, 1]] - self.timelist[inds[:, 0]]).seconds
+        return np.vstack((inds[:, 0], inds[:, 1], last)).T
+    
+    def preprocess(self):
+        pass
+    
+    def process(self):
+        pass
+    
+    def postprocess(self):
+        pass
+    
