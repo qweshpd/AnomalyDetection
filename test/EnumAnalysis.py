@@ -6,7 +6,7 @@ from scipy.stats import norm
 #from itertools import groupby
 
 _scale = 0.1
-_threshold = 60
+_threshold = 0.6
 
 class auto_onehot(object):
     '''Encode categorical integer features using one-hot.
@@ -61,8 +61,9 @@ class NBEnum(object):
         self.data = datalist
         self.features = list(set(datalist))
         self.encode = auto_onehot({self.name: self.features})
-        if model == None:
-            self.code_array = self.modeling()
+        if model is not None:
+            self.model = model
+        self.code_array = self._modeling()
 
     def _encoding(self, all_data):
         '''Encode categorical integer features using one-hot.'''
@@ -94,15 +95,15 @@ class NBEnum(object):
         '''Statistical matrix.'''
         dmean = nlist.mean()
         dstd = nlist.std()
-        factor = np.sqrt(-np.log(1 - _threshold/100)/_scale)
+        factor = np.sqrt(-np.log(1 - _threshold)/_scale)
         dmax = dmean + dstd * factor
         dmin = max(0, dmean - dstd * factor)
 
         return  dmean, dstd, dmax, dmin
     
-    def modeling(self):
+    def _modeling(self):
         '''Build statistical model based on historical data.'''
-        self.model = pd.DataFrame(columns=self.features, 
+        tmpmodel = pd.DataFrame(columns=self.features, 
                           index = ['mu', 'sigma', 'tmax', 'tmin'])
 
         features = self.features
@@ -112,13 +113,15 @@ class NBEnum(object):
         for i in np.arange(self.encode.attrnum[0]):
             tmparray = self._seq_analy(code_array[:, i])
             self.feature_array[features[i]] = tmparray
-            self.model[features[i]] = self._freq_anal(tmparray[:, 2])
+            tmpmodel[features[i]] = self._freq_anal(tmparray[:, 2])
+        
+        if not hasattr(self, 'model'):
+            self.model = tmpmodel
             
         return code_array
     
     def getscore(self, data = None):
-        '''
-        Analyze data based on model.
+        '''Analyze data based on model.
         
         Parameters
         ----------
@@ -216,20 +219,17 @@ class NBEnum(object):
                     test_array = tmpdict[fi][:, 2]
                     
                     plt.subplot(len(features), 1, entry + 1)
-                    
                     base = np.arange(-10, max(test_array)+20, 1)
                     normal = norm.pdf(base, pltmodel[0], pltmodel[1])
                     anomalous = np.logical_or(base > pltmodel[2],
                                               base < pltmodel[3])
-                    
+                    print(anomalous)
                     plt.hist(test_array, bins=base-0.5, 
                              normed=True, zorder=1)
                     plt.fill_between(base, normal, where=anomalous, 
                                      color = [1,0,0,0.4], zorder = 2)
                     plt.plot(base, normal, color = 'black', zorder = 3)
-                    plt.title('Feature distribution of %s'%fi)
+                    plt.title('Feature distribution of %s'%fi, fontsize = 20)
                     plt.show()
-
             
         return alert
-    
