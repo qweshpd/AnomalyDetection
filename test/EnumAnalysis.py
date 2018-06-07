@@ -154,7 +154,7 @@ class NBEnum(object):
                                           test_array < model_array[3]))[0]
             
             if inds.any():
-                alert.append(tmpdict[onef][inds][:, :2])
+                alert.append([onef, tmpdict[onef][inds][:, :2]])
         
         if show:
             try:
@@ -166,9 +166,8 @@ class NBEnum(object):
                 plt.figure()
                 for fi in features:
                     entry = features.index(fi)
-                    print(fi)
-                    pltmodel = np.array(model[onef])
-                    test_array = tmpdict[onef][:, 2]
+                    pltmodel = np.array(model[fi])
+                    test_array = tmpdict[fi][:, 2]
                     
                     plt.subplot(len(features), 1, entry + 1)
                     
@@ -182,6 +181,11 @@ class NBEnum(object):
                     plt.fill_between(base, normal, where=anomalous, 
                                      color = [1,0,0,0.4], zorder = 2)
                     plt.plot(base, normal, color = 'black', zorder = 3)
+                    plt.title('Feature distribution of %s'%fi)
                     plt.show()
-
-        return np.sort(np.vstack(alert), axis = 0)
+        
+#        if np.shape(alert)[0]:
+#            alert = np.sort(np.vstack(alert), axis = 0)
+            
+        return alert
+    
