@@ -9,8 +9,7 @@ _scale = 10
 _threshold = 60
 
 class auto_onehot(object):
-    '''
-    Encode categorical integer features using one-hot.
+    '''Encode categorical integer features using one-hot.
     
     Parameters
     --------
@@ -38,8 +37,7 @@ class auto_onehot(object):
         self.vnum = sum(self.attrnum)    
     
     def transform(self, slicefeature):
-        '''
-        Fit OneHotEncoder to X, then transform X.
+        '''Fit OneHotEncoder to X, then transform X.
         
         Parameters
         ----------
@@ -56,9 +54,7 @@ class auto_onehot(object):
 
 
 class NBEnum(object):
-    '''
-    Automatical anomaly detection for enum-like variables.
-    '''
+    '''Automatical anomaly detection for enum-like variables.'''
     
     def __init__(self, var_name, datalist):
         self.name = var_name
@@ -77,8 +73,7 @@ class NBEnum(object):
         return code_array
     
     def _seq_analy(self, code, value = 1):
-        '''
-        Analysis sequential code.
+        '''Analysis sequential code.
         
         Parameters
         ----------
@@ -89,7 +84,10 @@ class NBEnum(object):
         '''
         isvalue = np.concatenate(([0], np.equal(code, value), [0]))
         inds = np.where(np.abs(np.diff(isvalue)) == 1)[0].reshape(-1, 2)
+        
+        #Note: Replace by last-time in the futrue version
         last = inds[:, 1] - inds[:, 0]
+        
         inds[:, 1] = inds[:, 1] - 1
         return np.vstack((inds[:, 0], inds[:, 1], last)).T
     
@@ -104,9 +102,7 @@ class NBEnum(object):
         return  dmean, dstd, dmax, dmin
     
     def modeling(self):
-        '''
-        Build statistical model based on historical data.
-        '''
+        '''Build statistical model based on historical data.'''
         features = self.features
         code_array = self._encoding(self.data)
         self.feature_array = {}
@@ -116,8 +112,7 @@ class NBEnum(object):
             self.model[features[i]] = self._freq_anal(tmparray[:, 2])
             
     def analyze(self, data = None, show = False):
-        '''
-        Analyze data based on model.
+        '''Analyze data based on model.
         
         Parameters
         ----------
