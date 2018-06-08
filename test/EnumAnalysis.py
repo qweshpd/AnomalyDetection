@@ -112,7 +112,7 @@ class AnalyzeEnum(object):
             self.model = tmpmodel
             
         self.features = features
-        self.code_array = code_array
+        self.code_array = pd.DataFrame(code_array, columns=features)
         return code_array
     
     def getscore(self, data = None):
@@ -212,17 +212,16 @@ class AnalyzeEnum(object):
                     entry = features.index(fi)
                     pltmodel = np.array(model[fi])
                     test_array = tmpdict[fi][:, 2]
+                    base = np.arange(max(-10, min(test_array)-20), max(test_array)+20, 1)
+                    normal = norm.pdf(base, pltmodel[0], pltmodel[1] if pltmodel[1] else 1)
+                    anomalous = np.logical_or(base > pltmodel[2], base < pltmodel[3])
                     
                     plt.subplot(len(features), 1, entry + 1)
-                    base = np.arange(-10, max(test_array)+20, 1)
-                    normal = norm.pdf(base, pltmodel[0], pltmodel[1])
-                    anomalous = np.logical_or(base > pltmodel[2],
-                                              base < pltmodel[3])
                     plt.hist(test_array, bins=base-0.5, 
                              normed=True, zorder=1)
                     plt.fill_between(base, normal, where=anomalous, 
-                                     color = [1,0,0,0.4], zorder = 2)
-                    plt.plot(base, normal, color = 'black', zorder = 3)
+                                     color=[1,0,0,0.4], zorder=2)
+                    plt.plot(base, normal, color='black', zorder=3)
                     plt.title('Feature distribution of %s'%fi, fontsize = 20)
                     plt.show()
             
@@ -263,10 +262,13 @@ class NBEnum(AnalyzeEnum):
         _, score_array = self.getscore(data = data)
         return score_array
     
-    def postprocess(self, score, time):
+    def postprocess(self, score, time, csc = True):
         '''Recover processed data into uniformed format.'''
         datalist = self.data
-        return pd.DataFrame(np.vstack((time, datalist, np.array(score['score']))).T,
+        score_array = np.array(score['score'])
+        if csc:
+            self._csc(score_array)
+        return pd.DataFrame(np.vstack((time, datalist, score_array)).T,
                             columns=['timestamp', 'data', 'score'])
     
     def analyze(self, DataItem):
@@ -276,6 +278,26 @@ class NBEnum(AnalyzeEnum):
         result = self.postprocess(score_array, time_array)
         return result
     
-    def get_cache(self):
+    def _csc(self, score_array):
+        '''Consider speacial cases for analyzing. Including:
+        a) Hardly change
+        b) Rare feature    
+        '''
+        code_array = np.array(self.code_array)[:, 1:].T
+
+        if len(set(score_array)) == 1:
+            score_array += 1
+            for tmp in self.code_array[:, 1:].T:
+                inds = np.where(np.diff(tmp) == 0)[0] + 1
+            score_array[inds] = 0
+            score_array[0] = 0
+        
+        for tmp in code_array:
+            if tmp.sum() < 2*np.ceil(len(self.data)/1000):
+                score_array[np.where(tmp)[0]] = 1
+        
+        return score_array
+    
+    def get_cache(self, score_array):
         '''Get data to cache.'''
         return self.model
