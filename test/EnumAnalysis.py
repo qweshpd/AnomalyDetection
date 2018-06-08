@@ -56,14 +56,8 @@ class auto_onehot(object):
 class AnalyzeEnum(object):
     '''Automatical anomaly detection for enum-like variables.'''
     
-    def __init__(self, var_name, datalist, model = None):
-        self.name = var_name
-        self.data = datalist
-        self.features = list(set(datalist))
-        self.encode = auto_onehot({self.name: self.features})
-        if model is not None:
-            self.model = model
-        self.code_array = self._modeling()
+    def __init__(self, model = None):
+        self.model = model
 
     def _encoding(self, all_data):
         '''Encode categorical integer features using one-hot.'''
@@ -98,23 +92,27 @@ class AnalyzeEnum(object):
 
         return  dmean, dstd, dmax, dmin
     
-    def _modeling(self):
+    def _modeling(self, var_name, datalist):
         '''Build statistical model based on historical data.'''
-        tmpmodel = pd.DataFrame(columns=self.features, 
-                          index = ['mu', 'sigma', 'tmax', 'tmin'])
-
-        features = self.features
-        code_array = self._encoding(self.data)
+        self.name = var_name
+        self.data = datalist
+        features = list(set(datalist))
+        self.encode = auto_onehot({var_name: features})
+        code_array = self._encoding(datalist)    
         
+        tmpmodel = pd.DataFrame(columns=features, 
+                          index = ['mu', 'sigma', 'tmax', 'tmin'])
         self.feature_array = {}
         for i in np.arange(self.encode.attrnum[0]):
             tmparray = self._seq_analy(code_array[:, i])
             self.feature_array[features[i]] = tmparray
             tmpmodel[features[i]] = self._freq_anal(tmparray[:, 2])
         
-        if not hasattr(self, 'model'):
+        if self.model is None:
             self.model = tmpmodel
             
+        self.features = features
+        self.code_array = code_array
         return code_array
     
     def getscore(self, data = None):
@@ -166,7 +164,7 @@ class AnalyzeEnum(object):
                                   
         return scoredict, finalscore
     
-    def analyze(self, data = None, show = False):
+    def histanalyze(self, data = None, show = False):
         '''Analyze data based on model.
         
         Parameters
@@ -233,10 +231,6 @@ class AnalyzeEnum(object):
 
 class NBEnum(AnalyzeEnum):
     
-    def __init__(self, var_name, datalist, timelist, cachemodel):
-        self.timelist = timelist
-        super().__init__(var_name, datalist, model = cachemodel)
-    
     def _seq_analy(self, code, value = 1):
         '''Analysis sequential code.
         
@@ -250,15 +244,38 @@ class NBEnum(AnalyzeEnum):
         isvalue = np.concatenate(([0], np.equal(code, value), [0]))
         inds = np.where(np.abs(np.diff(isvalue)) == 1)[0].reshape(-1, 2)
         inds[:, 1] = inds[:, 1] - 1
-        last = (self.timelist[inds[:, 1]] - self.timelist[inds[:, 0]]).seconds
+        last = [i.seconds for i in (self.timelist[inds[:, 1]] - self.timelist[inds[:, 0]])]
         return np.vstack((inds[:, 0], inds[:, 1], last)).T
     
-    def preprocess(self):
-        pass
+    def preprocess(self, CData):
+        '''Extract data info from DataItem and prepare for processing'''
+        var = CData.var_name
+        data = np.vstack(CData.data)
+        data_array = data[:, 1]
+        time_array = data[:, 0]
+        self.timelist = time_array
+        _ = self._modeling(var, data_array)
+        
+        return time_array, data_array
     
-    def process(self):
-        pass
+    def process(self, data = None):
+        '''Main process of algorithm which analyze each feature.'''
+        _, score_array = self.getscore(data = data)
+        return score_array
     
-    def postprocess(self):
-        pass
+    def postprocess(self, score, time):
+        '''Recover processed data into uniformed format.'''
+        datalist = self.data
+        return pd.DataFrame(np.vstack((time, datalist, np.array(score['score']))).T,
+                            columns=['timestamp', 'data', 'score'])
     
+    def analyze(self, DataItem):
+        '''Automatically processing data.'''
+        time_array, data_array = self.preprocess(DataItem)
+        score_array = self.process(data = data_array)
+        result = self.postprocess(score_array, time_array)
+        return result
+    
+    def get_cache(self):
+        '''Get data to cache.'''
+        return self.model
