@@ -6,7 +6,7 @@ from scipy.stats import norm
 #from itertools import groupby
 
 _scale = 0.1
-_threshold = 0.6
+_threshold = 0.5
 
 class auto_onehot(object):
     '''Encode categorical integer features using one-hot.
@@ -97,6 +97,7 @@ class AnalyzeEnum(object):
         self.name = var_name
         self.data = datalist
         features = list(set(datalist))
+        features.sort()
         self.encode = auto_onehot({var_name: features})
         code_array = self._encoding(datalist)    
         
@@ -190,15 +191,16 @@ class AnalyzeEnum(object):
                 tmpdict[features[i]] = tmparray
    
         model = self.model
-        alert = []
+        alert = {}
         for onef in features:
             model_array = np.array(model[onef])
             test_array = tmpdict[onef][:, 2]
-            inds = np.where(np.logical_or(test_array > model_array[2],
-                                          test_array < model_array[3]))[0]
+            tmp = np.logical_or(test_array > model_array[2],
+                                test_array < model_array[3])
+            inds = np.where(tmp)[0]
             
-            if inds.any():
-                alert.append([onef, tmpdict[onef][inds][:, :2]])
+            if len(inds):
+                alert[str(onef)] = tmpdict[onef][inds][:, :2]
         
         if show:
             try:
@@ -280,14 +282,15 @@ class NBEnum(AnalyzeEnum):
     
     def _csc(self, score_array):
         '''Consider speacial cases for analyzing. Including:
-        a) Hardly change
-        b) Rare feature    
+        a) Hardly change 
+        b) Rare feature
+        c) Change frequncy change
         '''
-        code_array = np.array(self.code_array)[:, 1:].T
+        code_array = np.array(self.code_array).T
 
         if len(set(score_array)) == 1:
             score_array += 1
-            for tmp in self.code_array[:, 1:].T:
+            for tmp in code_array:
                 inds = np.where(np.diff(tmp) == 0)[0] + 1
             score_array[inds] = 0
             score_array[0] = 0
@@ -295,6 +298,21 @@ class NBEnum(AnalyzeEnum):
         for tmp in code_array:
             if tmp.sum() < 2*np.ceil(len(self.data)/1000):
                 score_array[np.where(tmp)[0]] = 1
+        
+        if len(self.features) > 2:
+            d = np.array(self.code_array)
+            y = []
+            for i in np.arange(len(d)-1):
+                y.append(sum(abs(d[i]- d[i+1])))
+                
+            tp = AnalyzeEnum()
+            _ =  tp._modeling('test', y)
+            ana = tp.histanalyze()['0.0'].reshape(1, -1)[0]
+            for j in ana:
+                if j == 0:
+                    continue
+                score_array[j] = 1
+        
         
         return score_array
     
