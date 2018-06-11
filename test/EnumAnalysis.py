@@ -3,9 +3,10 @@
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
+import copy
 #from itertools import groupby
 
-_SCALE = 0.1
+_SCALE = 15
 _THRESHOLD = 0.5
 _RARE_FACTOR = 0.005
 
@@ -85,7 +86,7 @@ class AnalyzeEnum(object):
         """Statistical matrix."""
         dmean = nlist.mean()
         dstd = nlist.std()
-        factor = np.sqrt(-np.log(1 - _THRESHOLD)/_SCALE)
+        factor = np.sqrt(-np.log(1 - _THRESHOLD)*_SCALE)
         dmax = dmean + dstd * factor
         dmin = max(0, dmean - dstd * factor)
 
@@ -138,7 +139,7 @@ class AnalyzeEnum(object):
             for i in np.arange(self.encode.attrnum[0]):
                 tmparray = self._seq_analy(encode_data[:, i])
                 tmpdict[features[i]] = tmparray
-    
+            
         model = self.model
         final_score = np.zeros((1, encode_data.shape[0]))
         scoredict = {}
@@ -148,12 +149,12 @@ class AnalyzeEnum(object):
             std = model_array[1] if model_array[1] else 1
             test_array = tmpdict[onef][:, 2]
 
-            score_array = 1 - np.exp(-_SCALE*((test_array-mean)/std)**2)
+            score_array = 1 - np.exp(-((test_array-mean)/std)**2/_SCALE)
             scoredict[onef] = np.vstack((tmpdict[onef][:, 0], 
                                          tmpdict[onef][:, 1],
                                          tmpdict[onef][:, 2],
                                          score_array)).T
-
+        
             for i in np.arange(len(test_array)):
                 indif = tmpdict[onef][:, :2][i]
                 score = score_array[i]
@@ -188,7 +189,7 @@ class AnalyzeEnum(object):
             for i in np.arange(self.encode.attrnum[0]):
                 tmparray = self._seq_analy(encode_data[:, i])
                 tmpdict[features[i]] = tmparray
-   
+            
         model = self.model
         alert = {}
         for onef in features:
@@ -200,7 +201,7 @@ class AnalyzeEnum(object):
             
             if len(inds):
                 alert[str(onef)] = tmpdict[onef][inds][:, :2]
-        
+            
         if show:
             try:
                 import matplotlib.pylab as plt
@@ -228,7 +229,7 @@ class AnalyzeEnum(object):
                     plt.plot(base, normal, color="black", zorder=3)
                     plt.title("Feature distribution of %s"%fi, fontsize = 20)
                     plt.show()
-            
+        
         return alert
 
 
@@ -287,8 +288,15 @@ class NBEnum(AnalyzeEnum):
         a) Rare change 
         b) Rare feature
         c) Change of frequncy
+        
+        Parameters
+        ----------
+        score_array : array-like
+            Score of data.
         """
         code_array = np.array(self.code_array).T
+        initial_score = copy.deepcopy(score_array[0])
+        final_score = copy.deepcopy(score_array[-1])
         f_array = self.feature_array
         tmp_factor = min(10, np.ceil(len(self.data) * _RARE_FACTOR))
         
@@ -318,7 +326,8 @@ class NBEnum(AnalyzeEnum):
             for j in ana:
                 score_array[j] = 1
         
-        score_array[0] = 0
+        score_array[0] = initial_score
+        score_array[-1] = final_score
         # TODO: Merge initial and final indices.
         return score_array
     
