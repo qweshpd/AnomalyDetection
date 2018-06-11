@@ -5,11 +5,12 @@ import pandas as pd
 from scipy.stats import norm
 #from itertools import groupby
 
-_scale = 0.1
-_threshold = 0.5
+_SCALE = 0.1
+_THRESHOLD = 0.5
+_RARE_FACTOR = 0.005
 
 class auto_onehot(object):
-    '''Encode categorical integer features using one-hot.
+    """Encode categorical integer features using one-hot.
     
     Parameters
     --------
@@ -19,32 +20,30 @@ class auto_onehot(object):
     Examples
     --------
     
-    >>>feature = {'fe1': ['ab', 'bc', 'ca'],
-                  'fe2': [10*i for i in np.arange(8)],
-                  'fe3': ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]}
-    >>>auto_onehot(feature).transform(['ab', 60, 'Sun'])
-    array([ 1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.,  0.,  0.,
-        0.,  0.,  0.,  0.,  1.])
-    '''
+    >>>feature = {"fe1": ["ab", "bc", "ca"],
+                  "fe2": [10*i for i in np.arange(8)]}
+    >>>auto_onehot(feature).transform(["ab", 60, "Sun"])
+    array([ 1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.])
+    """
     
     def __init__(self, featuredic):
-        self.feature = list(featuredic.keys())
-        self.fnum = len(featuredic.keys())
-        self.attrnum = []
+        self.feature = list(featuredic.keys()) # All features
+        self.fnum = len(featuredic.keys()) # total feature number
+        self.attrnum = [] # number of each feature
         for fea in featuredic.keys():
             setattr(self, fea, featuredic[fea])
             self.attrnum.append(len(featuredic[fea]))
-        self.vnum = sum(self.attrnum)    
+        self.vnum = sum(self.attrnum) # vector length
     
     def transform(self, slicefeature):
-        '''Fit OneHotEncoder to X, then transform X.
+        """Fit OneHotEncoder to X, then transform X.
         
         Parameters
         ----------
         X : array-like, list of feature instances.
             Input array of features.
-        '''
-        assert len(slicefeature) == self.fnum, 'please input only %d feature(s)'%self.fnum
+        """
+        assert len(slicefeature) == self.fnum, "please input only %d feature(s)"%self.fnum
         feature_array = np.zeros((1, self.vnum))[0]
         for i in np.arange(self.fnum):
             allvalue = getattr(self, self.feature[i])
@@ -54,20 +53,20 @@ class auto_onehot(object):
 
 
 class AnalyzeEnum(object):
-    '''Automatical anomaly detection for enum-like variables.'''
+    """Automatical anomaly detection for enum-like variables."""
     
-    def __init__(self, model = None):
+    def __init__(self, model=None):
         self.model = model
 
     def _encoding(self, all_data):
-        '''Encode categorical integer features using one-hot.'''
+        """Encode categorical integer features using one-hot."""
         tranf = self.encode.transform
         code_array = np.vstack(list(map(lambda x:tranf([x]), all_data)))
         
         return code_array
     
-    def _seq_analy(self, code, value = 1):
-        '''Analysis sequential code.
+    def _seq_analy(self, code, value=1):
+        """Analysis sequential code.
         
         Parameters
         ----------
@@ -75,7 +74,7 @@ class AnalyzeEnum(object):
             Code data to be analyzed.
         value : int, 0 or 1
             Target value.
-        '''
+        """
         isvalue = np.concatenate(([0], np.equal(code, value), [0]))
         inds = np.where(np.abs(np.diff(isvalue)) == 1)[0].reshape(-1, 2)
         last = inds[:, 1] - inds[:, 0]
@@ -83,17 +82,17 @@ class AnalyzeEnum(object):
         return np.vstack((inds[:, 0], inds[:, 1], last)).T
     
     def _freq_anal(self, nlist):
-        '''Statistical matrix.'''
+        """Statistical matrix."""
         dmean = nlist.mean()
         dstd = nlist.std()
-        factor = np.sqrt(-np.log(1 - _threshold)/_scale)
+        factor = np.sqrt(-np.log(1 - _THRESHOLD)/_SCALE)
         dmax = dmean + dstd * factor
         dmin = max(0, dmean - dstd * factor)
 
         return  dmean, dstd, dmax, dmin
     
     def _modeling(self, var_name, datalist):
-        '''Build statistical model based on historical data.'''
+        """Build statistical model based on historical data."""
         self.name = var_name
         self.data = datalist
         features = list(set(datalist))
@@ -102,7 +101,7 @@ class AnalyzeEnum(object):
         code_array = self._encoding(datalist)    
         
         tmpmodel = pd.DataFrame(columns=features, 
-                          index = ['mu', 'sigma', 'tmax', 'tmin'])
+                          index = ["mu", "sigma", "tmax", "tmin"])
         self.feature_array = {}
         for i in np.arange(self.encode.attrnum[0]):
             tmparray = self._seq_analy(code_array[:, i])
@@ -116,8 +115,8 @@ class AnalyzeEnum(object):
         self.code_array = pd.DataFrame(code_array, columns=features)
         return code_array
     
-    def getscore(self, data = None):
-        '''Analyze data based on model.
+    def getscore(self, data=None):
+        """Analyze data based on model.
         
         Parameters
         ----------
@@ -128,7 +127,7 @@ class AnalyzeEnum(object):
         -------
         inds : 2D array-like [indi, indf]
             Initial and final indices of data detected as anomaly.
-        '''
+        """
         features = self.features
         if data is None:
             encode_data = self._encoding(self.data)
@@ -149,7 +148,7 @@ class AnalyzeEnum(object):
             std = model_array[1] if model_array[1] else 1
             test_array = tmpdict[onef][:, 2]
 
-            score_array = 1 - np.exp(-_scale*((test_array-mean)/std)**2)
+            score_array = 1 - np.exp(-_SCALE*((test_array-mean)/std)**2)
             scoredict[onef] = np.vstack((tmpdict[onef][:, 0], 
                                          tmpdict[onef][:, 1],
                                          tmpdict[onef][:, 2],
@@ -161,12 +160,12 @@ class AnalyzeEnum(object):
                 final_score[0, indif[0]: indif[1] + 1] = score
         
         finalscore = pd.DataFrame(np.hstack((encode_data, final_score.T)),
-                                  columns=self.features+['score'])
+                                  columns=self.features+["score"])
                                   
         return scoredict, finalscore
     
-    def histanalyze(self, data = None, show = False):
-        '''Analyze data based on model.
+    def histanalyze(self, data=None, show=False):
+        """Analyze data based on model.
         
         Parameters
         ----------
@@ -179,7 +178,7 @@ class AnalyzeEnum(object):
         -------
         inds : 2D array-like [indi, indf]
             Initial and final indices of data detected as anomaly.
-        '''
+        """
         features = self.features
         if data is None:
             tmpdict = self.feature_array
@@ -205,26 +204,29 @@ class AnalyzeEnum(object):
         if show:
             try:
                 import matplotlib.pylab as plt
-                plt.rcParams['figure.figsize'] = 15, 6
+                plt.rcParams["figure.figsize"] = 15, 6
             except ImportError:
-                print('matplotlib is not available.')
+                print("matplotlib is not available.")
             else:
                 plt.figure()
                 for fi in features:
                     entry = features.index(fi)
                     pltmodel = np.array(model[fi])
                     test_array = tmpdict[fi][:, 2]
-                    base = np.arange(max(-10, min(test_array)-20), max(test_array)+20, 1)
-                    normal = norm.pdf(base, pltmodel[0], pltmodel[1] if pltmodel[1] else 1)
-                    anomalous = np.logical_or(base > pltmodel[2], base < pltmodel[3])
+                    base = np.arange(max(-10, min(test_array)-20), 
+                                     max(test_array)+20, 1)
+                    normal = norm.pdf(base, pltmodel[0], pltmodel[1] \
+                                      if pltmodel[1] else 1)
+                    anomalous = np.logical_or(base > pltmodel[2], 
+                                              base < pltmodel[3])
                     
                     plt.subplot(len(features), 1, entry + 1)
                     plt.hist(test_array, bins=base-0.5, 
                              normed=True, zorder=1)
                     plt.fill_between(base, normal, where=anomalous, 
                                      color=[1,0,0,0.4], zorder=2)
-                    plt.plot(base, normal, color='black', zorder=3)
-                    plt.title('Feature distribution of %s'%fi, fontsize = 20)
+                    plt.plot(base, normal, color="black", zorder=3)
+                    plt.title("Feature distribution of %s"%fi, fontsize = 20)
                     plt.show()
             
         return alert
@@ -232,8 +234,8 @@ class AnalyzeEnum(object):
 
 class NBEnum(AnalyzeEnum):
     
-    def _seq_analy(self, code, value = 1):
-        '''Analysis sequential code.
+    def _seq_analy(self, code, value=1):
+        """Analysis sequential code.
         
         Parameters
         ----------
@@ -241,7 +243,7 @@ class NBEnum(AnalyzeEnum):
             Code data to be analyzed.
         value : int, 0 or 1
             Target value.
-        '''
+        """
         isvalue = np.concatenate(([0], np.equal(code, value), [0]))
         inds = np.where(np.abs(np.diff(isvalue)) == 1)[0].reshape(-1, 2)
         inds[:, 1] = inds[:, 1] - 1
@@ -249,7 +251,7 @@ class NBEnum(AnalyzeEnum):
         return np.vstack((inds[:, 0], inds[:, 1], last)).T
     
     def preprocess(self, CData):
-        '''Extract data info from DataItem and prepare for processing'''
+        """Extract data info from DataItem and prepare for processing"""
         var = CData.var_name
         data = np.vstack(CData.data)
         data_array = data[:, 1]
@@ -259,63 +261,67 @@ class NBEnum(AnalyzeEnum):
         
         return time_array, data_array
     
-    def process(self, data = None):
-        '''Main process of algorithm which analyze each feature.'''
+    def process(self, data=None):
+        """Main process of algorithm which analyze each feature."""
         _, score_array = self.getscore(data = data)
         return score_array
     
-    def postprocess(self, score, time, csc = True):
-        '''Recover processed data into uniformed format.'''
+    def postprocess(self, score, time, csc=False):
+        """Recover processed data into uniformed format."""
         datalist = self.data
-        score_array = np.array(score['score'])
+        score_array = np.array(score["score"])
         if csc:
             self._csc(score_array)
         return pd.DataFrame(np.vstack((time, datalist, score_array)).T,
-                            columns=['timestamp', 'data', 'score'])
+                            columns=["timestamp", "data", "score"])
     
-    def analyze(self, DataItem):
-        '''Automatically processing data.'''
+    def analyze(self, DataItem, csc=False):
+        """Automatically processing data."""
         time_array, data_array = self.preprocess(DataItem)
         score_array = self.process(data = data_array)
-        result = self.postprocess(score_array, time_array)
+        result = self.postprocess(score_array, time_array, csc=csc)
         return result
     
     def _csc(self, score_array):
-        '''Consider speacial cases for analyzing. Including:
-        a) Hardly change 
+        """Consider speacial cases for analyzing. Including:
+        a) Rare change 
         b) Rare feature
-        c) Change frequncy change
-        '''
+        c) Change of frequncy
+        """
         code_array = np.array(self.code_array).T
-
-        if len(set(score_array)) == 1:
-            score_array += 1
-            for tmp in code_array:
-                inds = np.where(np.diff(tmp) == 0)[0] + 1
-            score_array[inds] = 0
-            score_array[0] = 0
+        f_array = self.feature_array
+        tmp_factor = min(10, np.ceil(len(self.data) * _RARE_FACTOR))
         
+        # Rare change 
+        for key in f_array:
+            c_array = f_array[key][:, :2]
+            if c_array.shape[0] < tmp_factor:
+                for indi, indf in c_array:
+                    score_array[indi] = 1
+                    score_array[indf] = 1
+        
+        # Rare feature            
         for tmp in code_array:
-            if tmp.sum() < 2*np.ceil(len(self.data)/1000):
+            if tmp.sum() < tmp_factor:
                 score_array[np.where(tmp)[0]] = 1
         
+        # Change of frequncy
         if len(self.features) > 2:
             d = np.array(self.code_array)
             y = []
             for i in np.arange(len(d)-1):
-                y.append(sum(abs(d[i]- d[i+1])))
+                y.append(sum(abs(d[i]- d[i + 1])))
                 
             tp = AnalyzeEnum()
-            _ =  tp._modeling('test', y)
-            ana = tp.histanalyze()['0.0'].reshape(1, -1)[0]
+            _ =  tp._modeling("test", y)
+            ana = tp.histanalyze()["0.0"].reshape(1, -1)[0]
             for j in ana:
-                if j == 0:
-                    continue
                 score_array[j] = 1
         
-        
+        score_array[0] = 0
+        # TODO: Merge initial and final indices.
         return score_array
     
     def get_cache(self, score_array):
-        '''Get data to cache.'''
+        """Get data to cache."""
         return self.model
