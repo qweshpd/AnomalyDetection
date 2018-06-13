@@ -1,57 +1,18 @@
 # -*- coding: utf-8 -*-
 
+import logging
+import copy
 import numpy as np
 import pandas as pd
 from scipy.stats import norm
-import copy
-#from itertools import groupby
+
+from .encode import auto_onehot
+
+logger = logging.getLogger("EnumAnalysis")
 
 _SCALE = 15
 _THRESHOLD = 0.8
 _RARE_FACTOR = 0.005
-
-class auto_onehot(object):
-    """Encode categorical integer features using one-hot.
-    
-    Parameters
-    --------
-    featuredic : dict
-        All features with feature name.    
-    
-    Examples
-    --------
-    
-    >>>feature = {"fe1": ["ab", "bc", "ca"],
-                  "fe2": [10*i for i in np.arange(8)]}
-    >>>auto_onehot(feature).transform(["ab", 60, "Sun"])
-    array([ 1.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  1.,  0.])
-    """
-    
-    def __init__(self, featuredic):
-        self.feature = list(featuredic.keys()) # All features
-        self.fnum = len(featuredic.keys()) # total feature number
-        self.attrnum = [] # number of each feature
-        for fea in featuredic.keys():
-            setattr(self, fea, featuredic[fea])
-            self.attrnum.append(len(featuredic[fea]))
-        self.vnum = sum(self.attrnum) # vector length
-    
-    def transform(self, slicefeature):
-        """Fit OneHotEncoder to X, then transform X.
-        
-        Parameters
-        ----------
-        X : array-like, list of feature instances.
-            Input array of features.
-        """
-        assert len(slicefeature) == self.fnum, "please input only %d feature(s)"%self.fnum
-        feature_array = np.zeros((1, self.vnum))[0]
-        for i in np.arange(self.fnum):
-            allvalue = getattr(self, self.feature[i])
-            tmpnum = sum(self.attrnum[:i]) + allvalue.index(slicefeature[i])
-            feature_array[tmpnum] = 1
-        return feature_array
-
 
 class AnalyzeEnum(object):
     """Automatical anomaly detection for enum-like variables."""
@@ -292,7 +253,7 @@ class NBEnum(AnalyzeEnum):
         _, score_array = self.getscore(data = data)
         return score_array
     
-    def postprocess(self, score, time, csc=False):
+    def _modify(self, score, time, csc=False):
         """Recover processed data into uniformed format."""
         datalist = self.data
         score_array = np.array(score["score"])
@@ -306,7 +267,7 @@ class NBEnum(AnalyzeEnum):
         """Automatically processing data."""
         time_array, data_array = self.preprocess(DataItem)
         score_array = self.process(data = data_array)
-        result = self.postprocess(score_array, time_array, csc=csc)
+        result = self._modify(score_array, time_array, csc=csc)
         return result
     
     def _csc(self, score_array, reason):
@@ -372,3 +333,4 @@ class NBEnum(AnalyzeEnum):
     def get_cache(self, score_array):
         """Get data to cache."""
         return self.model
+
