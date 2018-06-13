@@ -7,7 +7,7 @@ import copy
 #from itertools import groupby
 
 _SCALE = 15
-_THRESHOLD = 0.5
+_THRESHOLD = 0.8
 _RARE_FACTOR = 0.005
 
 class auto_onehot(object):
@@ -150,6 +150,7 @@ class AnalyzeEnum(object):
             test_array = tmpdict[onef][:, 2]
 
             score_array = 1 - np.exp(-((test_array-mean)/std)**2/_SCALE)
+#            score_array = np.exp(-0.5 * ((test_array-mean)/std)**2)/(np.sqrt(2*np.pi) * std)
             scoredict[onef] = np.vstack((tmpdict[onef][:, 0], 
                                          tmpdict[onef][:, 1],
                                          tmpdict[onef][:, 2],
@@ -232,7 +233,30 @@ class AnalyzeEnum(object):
         
         return alert
 
-
+class CoFEnum(AnalyzeEnum):
+    
+    def __init__(self, timelist):
+        self.timelist = timelist
+        self.model = None
+    
+    def _seq_analy(self, code, value=1):
+        """Analysis sequential code.
+        
+        Parameters
+        ----------
+        code : array-like, contains only 0 or 1
+            Code data to be analyzed.
+        value : int, 0 or 1
+            Target value.
+        """
+        isvalue = np.concatenate(([0], np.equal(code, value), [0]))
+        inds = np.where(np.abs(np.diff(isvalue)) == 1)[0].reshape(-1, 2)
+        inds[:, 1] = inds[:, 1] - 1
+        last = [i.days*3600*24 + i.seconds for \
+                i in (self.timelist[inds[:, 1]] - self.timelist[inds[:, 0]])]
+        return np.vstack((inds[:, 0], inds[:, 1], last)).T
+    
+    
 class NBEnum(AnalyzeEnum):
     
     def _seq_analy(self, code, value=1):
@@ -248,7 +272,8 @@ class NBEnum(AnalyzeEnum):
         isvalue = np.concatenate(([0], np.equal(code, value), [0]))
         inds = np.where(np.abs(np.diff(isvalue)) == 1)[0].reshape(-1, 2)
         inds[:, 1] = inds[:, 1] - 1
-        last = [i.seconds for i in (self.timelist[inds[:, 1]] - self.timelist[inds[:, 0]])]
+        last = [i.days*3600*24 + i.seconds for \
+                i in (self.timelist[inds[:, 1]] - self.timelist[inds[:, 0]])]
         return np.vstack((inds[:, 0], inds[:, 1], last)).T
     
     def preprocess(self, CData):
@@ -271,10 +296,11 @@ class NBEnum(AnalyzeEnum):
         """Recover processed data into uniformed format."""
         datalist = self.data
         score_array = np.array(score["score"])
+        reason = ["distribution score"]*len(score_array)
         if csc:
-            self._csc(score_array)
-        return pd.DataFrame(np.vstack((time, datalist, score_array)).T,
-                            columns=["timestamp", "data", "score"])
+            score_array, reason = self._csc(score_array, reason)
+        return pd.DataFrame(np.vstack((time, datalist, score_array, reason)).T,
+                            columns=["timestamp", "data", "score", "reason"])
     
     def analyze(self, DataItem, csc=False):
         """Automatically processing data."""
@@ -283,7 +309,7 @@ class NBEnum(AnalyzeEnum):
         result = self.postprocess(score_array, time_array, csc=csc)
         return result
     
-    def _csc(self, score_array):
+    def _csc(self, score_array, reason):
         """Consider speacial cases for analyzing. Including:
         a) Rare change 
         b) Rare feature
@@ -294,6 +320,7 @@ class NBEnum(AnalyzeEnum):
         score_array : array-like
             Score of data.
         """
+        
         code_array = np.array(self.code_array).T
         initial_score = copy.deepcopy(score_array[0])
         final_score = copy.deepcopy(score_array[-1])
@@ -307,11 +334,16 @@ class NBEnum(AnalyzeEnum):
                 for indi, indf in c_array:
                     score_array[indi] = 1
                     score_array[indf] = 1
+                    reason[indi] = "Initial Rare change"
+                    reason[indf] = "Final Rare change"
         
         # Rare feature            
         for tmp in code_array:
             if tmp.sum() < tmp_factor:
-                score_array[np.where(tmp)[0]] = 1
+                tmpind = np.where(tmp)[0]
+                score_array[tmpind] = 1
+                for i in tmpind:
+                    reason[i] = "Rare feature"
         
         # Change of frequncy
         if len(self.features) > 2:
@@ -319,17 +351,23 @@ class NBEnum(AnalyzeEnum):
             y = []
             for i in np.arange(len(d)-1):
                 y.append(sum(abs(d[i]- d[i + 1])))
-                
-            tp = AnalyzeEnum()
+            tp = CoFEnum(self.timelist[:-1])
             _ =  tp._modeling("test", y)
-            ana = tp.histanalyze()["0.0"].reshape(1, -1)[0]
-            for j in ana:
-                score_array[j] = 1
-        
+            try:
+                ana = tp.histanalyze()["0.0"].reshape(1, -1)[0]
+            except:
+                pass
+            else:
+                for j in ana:
+                    score_array[j] = 1
+                    reason[j] = "Change of frequncy"
+        self.csc = tp
         score_array[0] = initial_score
         score_array[-1] = final_score
+        reason[0] = "distribution score"
+        reason[-1] = "distribution score"
         # TODO: Merge initial and final indices.
-        return score_array
+        return score_array, reason
     
     def get_cache(self, score_array):
         """Get data to cache."""
