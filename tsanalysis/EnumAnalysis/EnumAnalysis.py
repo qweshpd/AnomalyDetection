@@ -13,12 +13,50 @@ logger = logging.getLogger("EnumAnalysis")
 _SCALE = 15
 _THRESHOLD = 0.8
 _RARE_FACTOR = 0.005
+_cache_index = ["mu", "sigma", "tmax", "tmin", "scale", "rfactor"]
+
+def dd_convert(inst, target='dict'):
+    """Convert model from DataFrame to dict, or the other way."""
+    t = type(inst)
+    if target == 'dict':
+        if t == dict:
+            return inst
+        elif t == pd.core.frame.DataFrame:
+            ddict = {}
+            all_features = list(inst.columns)
+            indices = list(inst.index)
+            cache_num = len(_cache_index)
+            for onef in all_features:
+                tmp = np.array(inst[onef])
+                ddict[onef] = dict([(indices[i], tmp[i]) for i in np.arange(cache_num)])
+            return ddict
+        else:
+            raise ValueError("Please input a valid data format!")
+    elif target == 'df':
+        if t == dict:
+            all_features = list(inst.keys())
+            dframe = pd.DataFrame(columns=all_features, index=_cache_index)
+            for onef in all_features:
+                for onevalue in inst[onef]: 
+                    dframe.loc[[onef],[onevalue]] = inst[onef][onevalue]
+            return dframe
+        elif t == pd.core.frame.DataFrame:
+            return inst
+        else:
+            raise ValueError("Please input a valid data format!")
+    else:
+        raise ValueError("Please input a valid target type!")
+
 
 class AnalyzeEnum(object):
     """Automatical anomaly detection for enum-like variables."""
     
     def __init__(self, model=None):
-        self.model = model
+        if model is None:
+            self.model = None
+        else:
+            self.model = dd_convert(model, target='df')
+            
 
     def _encoding(self, all_data):
         """Encode categorical integer features using one-hot."""
@@ -51,7 +89,7 @@ class AnalyzeEnum(object):
         dmax = dmean + dstd * factor
         dmin = max(0, dmean - dstd * factor)
 
-        return  dmean, dstd, dmax, dmin
+        return  dmean, dstd, dmax, dmin, _SCALE, _RARE_FACTOR
     
     def _modeling(self, var_name, datalist):
         """Build statistical model based on historical data."""
@@ -62,16 +100,20 @@ class AnalyzeEnum(object):
         self.encode = auto_onehot({var_name: features})
         code_array = self._encoding(datalist)    
         
-        tmpmodel = pd.DataFrame(columns=features, 
-                          index = ["mu", "sigma", "tmax", "tmin"])
+        tmpmodel = pd.DataFrame(columns=features, index = _cache_index)
         self.feature_array = {}
-        for i in np.arange(self.encode.attrnum[0]):
-            tmparray = self._seq_analy(code_array[:, i])
-            self.feature_array[features[i]] = tmparray
-            tmpmodel[features[i]] = self._freq_anal(tmparray[:, 2])
+
         
         if self.model is None:
+            for i in np.arange(self.encode.attrnum[0]):
+                tmparray = self._seq_analy(code_array[:, i])
+                self.feature_array[features[i]] = tmparray
+                tmpmodel[features[i]] = self._freq_anal(tmparray[:, 2])
             self.model = tmpmodel
+        else:
+            for i in np.arange(self.encode.attrnum[0]):
+                tmparray = self._seq_analy(code_array[:, i])
+                self.feature_array[features[i]] = tmparray
             
         self.features = features
         self.code_array = pd.DataFrame(code_array, columns=features)
@@ -322,15 +364,13 @@ class NBEnum(AnalyzeEnum):
                 for j in ana:
                     score_array[j] = 1
                     reason[j] = "Change of frequncy"
-        self.csc = tp
         score_array[0] = initial_score
         score_array[-1] = final_score
         reason[0] = "distribution score"
         reason[-1] = "distribution score"
-        # TODO: Merge initial and final indices.
         return score_array, reason
     
-    def get_cache(self, score_array):
+    def get_cache(self):
         """Get data to cache."""
-        return self.model
+        return dd_convert(self.model, target='dict')
 

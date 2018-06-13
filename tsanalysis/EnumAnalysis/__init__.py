@@ -20,4 +20,4 @@ logger.addHandler(sh)
 
 
 
-__all__ = ["EnumAnalysis"]
+__all__ = ["EnumAnalysis", "encode"]
