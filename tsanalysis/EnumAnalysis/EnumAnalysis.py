@@ -10,35 +10,39 @@ from .encode import auto_onehot
 
 logger = logging.getLogger("EnumAnalysis")
 
-_SCALE = 15
 _THRESHOLD = 0.8
 _RARE_FACTOR = 0.005
-_cache_index = ["mu", "sigma", "tmax", "tmin", "scale", "rfactor"]
+_SCALE = 15
+_RARE_CHANGE = 1
+_RARE_FEATURE = 1
 
-def dd_convert(inst, target='dict'):
+_CACHE_INDEX = ["mu", "sigma", "tmax", "tmin", "scale", "rchange", "rfeature"]
+
+def dd_convert(inst, target="dict"):
     """Convert model from DataFrame to dict, or the other way."""
     t = type(inst)
-    if target == 'dict':
+    if target == "dict":
         if t == dict:
             return inst
         elif t == pd.core.frame.DataFrame:
             ddict = {}
             all_features = list(inst.columns)
             indices = list(inst.index)
-            cache_num = len(_cache_index)
+            cache_num = len(_CACHE_INDEX)
             for onef in all_features:
                 tmp = np.array(inst[onef])
-                ddict[onef] = dict([(indices[i], tmp[i]) for i in np.arange(cache_num)])
+                ddict[onef] = dict([(indices[i], tmp[i]) for i in \
+                                     np.arange(cache_num)])
             return ddict
         else:
             raise ValueError("Please input a valid data format!")
-    elif target == 'df':
+    elif target == "df":
         if t == dict:
             all_features = list(inst.keys())
-            dframe = pd.DataFrame(columns=all_features, index=_cache_index)
+            dframe = pd.DataFrame(columns=all_features, index=_CACHE_INDEX)
             for onef in all_features:
                 for onevalue in inst[onef]: 
-                    dframe.loc[[onef],[onevalue]] = inst[onef][onevalue]
+                    dframe.loc[[onevalue],[onef]] = inst[onef][onevalue]
             return dframe
         elif t == pd.core.frame.DataFrame:
             return inst
@@ -55,7 +59,7 @@ class AnalyzeEnum(object):
         if model is None:
             self.model = None
         else:
-            self.model = dd_convert(model, target='df')
+            self.model = dd_convert(model, target="df")
             
 
     def _encoding(self, all_data):
@@ -89,7 +93,7 @@ class AnalyzeEnum(object):
         dmax = dmean + dstd * factor
         dmin = max(0, dmean - dstd * factor)
 
-        return  dmean, dstd, dmax, dmin, _SCALE, _RARE_FACTOR
+        return  dmean, dstd, dmax, dmin, _SCALE, _RARE_CHANGE, _RARE_FEATURE 
     
     def _modeling(self, var_name, datalist):
         """Build statistical model based on historical data."""
@@ -98,9 +102,9 @@ class AnalyzeEnum(object):
         features = list(set(datalist))
         features.sort()
         self.encode = auto_onehot({var_name: features})
-        code_array = self._encoding(datalist)    
+        code_array = self._encoding(datalist)
         
-        tmpmodel = pd.DataFrame(columns=features, index = _cache_index)
+        tmpmodel = pd.DataFrame(columns=features, index = _CACHE_INDEX)
         self.feature_array = {}
 
         
@@ -150,10 +154,10 @@ class AnalyzeEnum(object):
             model_array = np.array(model[onef])
             mean = model_array[0]
             std = model_array[1] if model_array[1] else 1
+            scale = model_array[4]
             test_array = tmpdict[onef][:, 2]
-
-            score_array = 1 - np.exp(-((test_array-mean)/std)**2/_SCALE)
 #            score_array = np.exp(-0.5 * ((test_array-mean)/std)**2)/(np.sqrt(2*np.pi) * std)
+            score_array = 1 - np.exp(-((test_array-mean)/std)**2/scale)
             scoredict[onef] = np.vstack((tmpdict[onef][:, 0], 
                                          tmpdict[onef][:, 1],
                                          tmpdict[onef][:, 2],
@@ -168,7 +172,30 @@ class AnalyzeEnum(object):
                                   columns=self.features+["score"])
                                   
         return scoredict, finalscore
+
+class CoFEnum(AnalyzeEnum):
+    """Analyze change of frequency."""
+    def __init__(self, timelist):
+        self.timelist = timelist
+        self.model = None
     
+    def _seq_analy(self, code, value=1):
+        """Analysis sequential code.
+        
+        Parameters
+        ----------
+        code : array-like, contains only 0 or 1
+            Code data to be analyzed.
+        value : int, 0 or 1
+            Target value.
+        """
+        isvalue = np.concatenate(([0], np.equal(code, value), [0]))
+        inds = np.where(np.abs(np.diff(isvalue)) == 1)[0].reshape(-1, 2)
+        inds[:, 1] = inds[:, 1] - 1
+        last = [i.days*3600*24 + i.seconds for \
+                i in (self.timelist[inds[:, 1]] - self.timelist[inds[:, 0]])]
+        return np.vstack((inds[:, 0], inds[:, 1], last)).T
+       
     def histanalyze(self, data=None, show=False):
         """Analyze data based on model.
         
@@ -235,32 +262,9 @@ class AnalyzeEnum(object):
                     plt.show()
         
         return alert
-
-class CoFEnum(AnalyzeEnum):
-    
-    def __init__(self, timelist):
-        self.timelist = timelist
-        self.model = None
-    
-    def _seq_analy(self, code, value=1):
-        """Analysis sequential code.
-        
-        Parameters
-        ----------
-        code : array-like, contains only 0 or 1
-            Code data to be analyzed.
-        value : int, 0 or 1
-            Target value.
-        """
-        isvalue = np.concatenate(([0], np.equal(code, value), [0]))
-        inds = np.where(np.abs(np.diff(isvalue)) == 1)[0].reshape(-1, 2)
-        inds[:, 1] = inds[:, 1] - 1
-        last = [i.days*3600*24 + i.seconds for \
-                i in (self.timelist[inds[:, 1]] - self.timelist[inds[:, 0]])]
-        return np.vstack((inds[:, 0], inds[:, 1], last)).T
-    
     
 class NBEnum(AnalyzeEnum):
+    """A prototype mainly for test."""
     
     def _seq_analy(self, code, value=1):
         """Analysis sequential code.
@@ -316,14 +320,14 @@ class NBEnum(AnalyzeEnum):
         """Consider speacial cases for analyzing. Including:
         a) Rare change 
         b) Rare feature
-        c) Change of frequncy
+        c) Change of frequency
         
         Parameters
         ----------
         score_array : array-like
             Score of data.
         """
-        
+        reason = np.array(reason)
         code_array = np.array(self.code_array).T
         initial_score = copy.deepcopy(score_array[0])
         final_score = copy.deepcopy(score_array[-1])
@@ -332,21 +336,23 @@ class NBEnum(AnalyzeEnum):
         
         # Rare change 
         for key in f_array:
+            fac = self.model.loc[["rchange"], [key]].values[0][0]
             c_array = f_array[key][:, :2]
             if c_array.shape[0] < tmp_factor:
-                for indi, indf in c_array:
-                    score_array[indi] = 1
-                    score_array[indf] = 1
-                    reason[indi] = "Initial Rare change"
-                    reason[indf] = "Final Rare change"
+                for ind in c_array:
+                    score_array[ind] = fac
+                    reason[ind] = "Initial Rare change", "Final Rare change"
         
-        # Rare feature            
-        for tmp in code_array:
-            if tmp.sum() < tmp_factor:
+        # Rare feature     
+        for i in np.arange(self.encode.vnum):
+            tmp = code_array[i, :]
+            key = self.features[i]
+            fre = tmp.sum()
+            if fre < tmp_factor:
+                fac = self.model.loc[["rfeature"], [key]].values[0][0]
                 tmpind = np.where(tmp)[0]
-                score_array[tmpind] = 1
-                for i in tmpind:
-                    reason[i] = "Rare feature"
+                score_array[tmpind] = fac
+                reason[tmpind] = "Rare feature"
         
         # Change of frequncy
         if len(self.features) > 2:
@@ -361,9 +367,9 @@ class NBEnum(AnalyzeEnum):
             except:
                 pass
             else:
-                for j in ana:
-                    score_array[j] = 1
-                    reason[j] = "Change of frequncy"
+                ana = ana[np.where(ana != 0)] + 1
+                score_array[ana] = 1
+                reason[ana] = "Change of frequncy"
         score_array[0] = initial_score
         score_array[-1] = final_score
         reason[0] = "distribution score"
@@ -372,5 +378,5 @@ class NBEnum(AnalyzeEnum):
     
     def get_cache(self):
         """Get data to cache."""
-        return dd_convert(self.model, target='dict')
+        return dd_convert(self.model, target="dict")
 

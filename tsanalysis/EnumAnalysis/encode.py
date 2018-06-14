@@ -11,7 +11,6 @@ class auto_onehot(object):
     
     Examples
     --------
-    
     >>>feature = {"fe1": ["ab", "bc", "ca"],
                   "fe2": [10*i for i in np.arange(8)]}
     >>>auto_onehot(feature).transform(["ab", 60, "Sun"])
@@ -35,8 +34,9 @@ class auto_onehot(object):
         X : array-like, list of feature instances.
             Input array of features.
         """
-        assert len(slicefeature) == self.fnum, "please input only %d feature(s)"%self.fnum
-        feature_array = np.zeros((1, self.vnum))[0]
+        assert len(slicefeature) == self.fnum, \
+                                    "please input only %d feature(s)"%self.fnum
+        feature_array = np.zeros((self.vnum,))
         for i in np.arange(self.fnum):
             allvalue = getattr(self, self.feature[i])
             tmpnum = sum(self.attrnum[:i]) + allvalue.index(slicefeature[i])
